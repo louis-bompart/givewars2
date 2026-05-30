@@ -71,6 +71,19 @@ const POPULAR_ITEMS: Record<string, any> = {
   }
 };
 
+// Helper function to rewrite GW2 render URLs to use our same-origin proxy /gw2-render
+function rewriteIconUrl(iconUrl: string): string {
+  if (!iconUrl) return iconUrl;
+  return iconUrl.replace("https://render.guildwars2.com/", "/gw2-render/");
+}
+
+// Rewrite popular items' icons at runtime initialization to leverage the same-origin proxy
+Object.keys(POPULAR_ITEMS).forEach(key => {
+  if (POPULAR_ITEMS[key].icon) {
+    POPULAR_ITEMS[key].icon = rewriteIconUrl(POPULAR_ITEMS[key].icon);
+  }
+});
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -107,7 +120,7 @@ export async function GET(req: Request) {
       name: data.name,
       type: data.type,
       rarity: data.rarity,
-      icon: data.icon,
+      icon: rewriteIconUrl(data.icon),
       description: data.description || `A level ${data.level || 0} ${data.type.toLowerCase()}.`
     };
 
