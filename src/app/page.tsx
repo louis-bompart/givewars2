@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import { useDiscord } from "@/hooks/useDiscord";
 import { useGiveaway } from "@/hooks/useGiveaway";
+import { useWebRTC } from "@/hooks/useWebRTC";
+import { ProposedItem } from "@/hooks/useGiveaway";
 import DiceRoller from "@/components/DiceRoller";
 import GW2Profile from "@/components/GW2Profile";
 import OrganizerPanel from "@/components/OrganizerPanel";
@@ -12,7 +14,7 @@ import ApiKeyModal from "@/components/ApiKeyModal";
 import { Dices, Shield, ShieldAlert, Sparkles, RefreshCw, Gift } from "lucide-react";
 
 export default function Home() {
-  const { isInDiscord, user, guild, loading, error, changeMockUser, mockUsers, logout } = useDiscord();
+  const { isInDiscord, user, guild, loading, error, changeMockUser, mockUsers, logout, discordSdk } = useDiscord();
 
   const handleDiscordLogin = () => {
     if (typeof window === "undefined") return;
@@ -38,8 +40,100 @@ export default function Home() {
     endGiveaway,
     simulateMockDecision,
     autoSimulateLobby,
+    setActiveItem,
+    setRolls,
+    removeProposedItem,
     winner
   } = useGiveaway();
+
+  const [peerQueues, setPeerQueues] = useState<Record<string, ProposedItem[]>>({});
+
+  const instanceId = React.useMemo(() => {
+    if (!user) return null;
+    return discordSdk?.instanceId || guild?.id || "standalone-lobby";
+  }, [user, guild, discordSdk]);
+
+  const {
+    connectedPeers,
+    broadcastRoll,
+    broadcastActiveItem,
+    broadcastEndGiveaway,
+    broadcastConsumeProposal,
+  } = useWebRTC({
+    instanceId,
+    userId: user?.id || null,
+    username: user?.username || null,
+    localQueue: proposalQueue,
+    onQueueUpdate: (peerUserId, queue) => {
+      setPeerQueues((prev) => {
+        const next = { ...prev };
+        if (queue.length === 0) {
+          delete next[peerUserId];
+        } else {
+          next[peerUserId] = queue;
+        }
+        return next;
+      });
+    },
+    onRoll: (peerUserId, username, roll, hasItem) => {
+      submitRoll(peerUserId, username, roll, hasItem);
+    },
+    onActiveItem: (item) => {
+      setActiveItem(item);
+      setRolls([]);
+    },
+    onEndGiveaway: () => {
+      endGiveaway();
+    },
+    onConsumeProposal: (proposalId) => {
+      removeProposedItem(proposalId);
+    },
+  });
+
+  // Merge local and peer queues chronologically (FIFO)
+  const displayedQueue = React.useMemo(() => {
+    return [
+      ...proposalQueue,
+      ...Object.values(peerQueues).flat()
+    ].sort((a, b) => a.timestamp - b.timestamp);
+  }, [proposalQueue, peerQueues]);
+
+  const handleLaunchNext = () => {
+    if (displayedQueue.length === 0) return;
+    const nextItem = displayedQueue[0];
+
+    // Start active roll event
+    startGiveaway({
+      id: nextItem.id,
+      name: nextItem.name,
+      type: nextItem.type,
+      rarity: nextItem.rarity,
+      icon: nextItem.icon,
+      description: nextItem.description
+    });
+    
+    // Broadcast active item to peers
+    broadcastActiveItem(nextItem);
+
+    // Consume item
+    const isLocal = proposalQueue.some(p => p.proposalId === nextItem.proposalId);
+    if (isLocal) {
+      removeProposedItem(nextItem.proposalId);
+    } else {
+      broadcastConsumeProposal(nextItem.proposalId);
+    }
+  };
+
+  const handleStartGiveaway = (item: any) => {
+    startGiveaway(item);
+    broadcastActiveItem(item);
+  };
+
+  const handleEndGiveaway = () => {
+    endGiveaway();
+    broadcastEndGiveaway();
+  };
+
   const [activeTab, setActiveTab] = useState<"roll" | "queue" | "profile" | "organizer">("roll");
 
   // Custom API Key storage (persists locally in user's browser as a fast-load fallback)
@@ -163,6 +257,7 @@ export default function Home() {
   const handleRollSubmitted = (rollValue: number, hasItem: boolean) => {
     if (!user) return;
     submitRoll(user.id, user.username, rollValue, hasItem);
+    broadcastRoll(user.username, rollValue, hasItem);
   };
 
   if (loading) {
@@ -274,6 +369,12 @@ export default function Home() {
         {/* User profile state snippet */}
         {user && (
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {connectedPeers.length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.3)", padding: "6px 14px", borderRadius: "20px", fontSize: "12px", color: "#10b981", fontWeight: "600" }}>
+                <span className="pulse-indicator" style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#10b981", display: "inline-block" }}></span>
+                {connectedPeers.length} {connectedPeers.length === 1 ? "Peer" : "Peers"} Connected
+              </div>
+            )}
             <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "rgba(255, 255, 255, 0.03)", border: "var(--border-glass)", padding: "6px 14px", borderRadius: "20px" }}>
               {user.avatarUrl ? (
                 <img src={user.avatarUrl} alt="Avatar" style={{ width: "20px", height: "20px", borderRadius: "50%", border: "1px solid rgba(255,255,255,0.2)" }} />
@@ -359,7 +460,7 @@ export default function Home() {
           onClick={() => setActiveTab("queue")}
         >
           <Gift style={{ width: "16px", height: "16px" }} />
-          Loot Queue ({proposalQueue.length})
+          Loot Queue ({displayedQueue.length})
         </button>
         <button
           className={`tab-btn ${activeTab === "profile" ? "active" : ""}`}
@@ -383,9 +484,9 @@ export default function Home() {
         {/* Loot Queue Tab */}
         {activeTab === "queue" && (
           <LootQueue
-            proposalQueue={proposalQueue}
+            proposalQueue={displayedQueue}
             proposeItem={proposeItem}
-            launchNextProposedItem={launchNextProposedItem}
+            launchNextProposedItem={handleLaunchNext}
             activeItem={activeItem}
             rolls={rolls}
             rollingUsers={rollingUsers}
@@ -417,11 +518,11 @@ export default function Home() {
             {activeTab === "organizer" && (
               <OrganizerPanel
                 activeItem={activeItem}
-                startGiveaway={startGiveaway}
-                endGiveaway={endGiveaway}
+                startGiveaway={handleStartGiveaway}
+                endGiveaway={handleEndGiveaway}
                 simulateMockDecision={simulateMockDecision}
                 autoSimulateLobby={autoSimulateLobby}
-                proposalQueue={proposalQueue}
+                proposalQueue={displayedQueue}
                 rolls={rolls}
                 winner={winner}
               />

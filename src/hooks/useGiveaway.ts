@@ -178,6 +178,15 @@ export function useGiveaway() {
     });
   };
 
+  // Remove a specific proposed item from the local queue (e.g. when consumed by a peer)
+  const removeProposedItem = (proposalId: string) => {
+    setProposalQueue(prev => {
+      const next = prev.filter(p => p.proposalId !== proposalId);
+      saveQueueState(next);
+      return next;
+    });
+  };
+
   const submitRoll = (userId: string, username: string, roll: number, hasItem: boolean) => {
     setRolls(prev => {
       // Check if user already rolled; if so, update their roll
@@ -336,6 +345,9 @@ export function useGiveaway() {
     simulateMockRoll,
     simulateMockDecision,
     autoSimulateLobby,
+    setActiveItem,
+    setRolls,
+    removeProposedItem,
     winner: getWinner(),
   };
 }
