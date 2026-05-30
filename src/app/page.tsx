@@ -334,8 +334,8 @@ export default function Home() {
           </p>
 
           <p style={{ color: "var(--color-text-secondary)", fontSize: "12px", lineHeight: "1.5", margin: "0 0 30px 0" }}>
-            This application is exclusively authorized for members of <strong>Eternal Baguette [BAGU]</strong> (Server ID: {process.env.NEXT_PUBLIC_ALLOWED_GUILD_ID}).
-            Please make sure you are logged in with the correct Discord account that has access to this server.
+            This application is exclusively authorized for members of designated partner servers.
+            Please make sure you are logged in with the correct Discord account that has access to an authorized server.
           </p>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
@@ -430,7 +430,7 @@ export default function Home() {
           </button>
 
           <div style={{ marginTop: "24px", fontSize: "11px", color: "var(--color-text-secondary)" }}>
-            Designed for Eternal Baguette [BAGU]
+            Cooperative Guild Activity
           </div>
         </div>
       </div>
@@ -643,7 +643,7 @@ export default function Home() {
         <div style={{ display: "flex", justifyContent: "center", gap: "20px", marginBottom: "8px" }}>
           <span>GiveWars2 v0.1.0-alpha</span>
           <span>•</span>
-          <span>Designed for Eternal Baguette [BAGU]</span>
+          <span>{guild ? `Active in ${guild.name}` : "Cooperative Guild Activity"}</span>
           <span>•</span>
           <a href="https://api.guildwars2.com" target="_blank" rel="noreferrer" style={{ color: "var(--color-gold)" }}>GW2 API Enabled</a>
         </div>

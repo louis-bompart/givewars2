@@ -186,44 +186,35 @@ export function useDiscord() {
 
         if (!isMounted) return;
 
-        // Fetch user information using authenticated SDK or via API
-        const discordUser: DiscordUser = {
-          id: auth.user.id,
-          username: auth.user.username,
-          globalName: auth.user.global_name || undefined,
-          avatarUrl: auth.user.avatar
-            ? `https://cdn.discordapp.com/avatars/${auth.user.id}/${auth.user.avatar}.png`
-            : undefined,
-        };
+        // Fetch user profile and guild dynamically from our backend proxy using the access token!
+        const meResponse = await fetch("/api/discord/me", {
+          headers: {
+            Authorization: `Bearer ${access_token}`,
+          },
+        });
 
-        // Get guild info if running in a guild context
-        let discordGuild: DiscordGuild | null = null;
-        const ALLOWED_GUILD_ID = process.env.NEXT_PUBLIC_ALLOWED_GUILD_ID;
-
-        if (sdk.guildId) {
-          discordGuild = {
-            id: sdk.guildId,
-            name: "My Discord Guild",
-          };
+        if (!meResponse.ok) {
+          const errData = await meResponse.json().catch(() => ({}));
+          if (meResponse.status === 403 && errData.error === "forbidden_guild") {
+            setContext({
+              isInDiscord: true,
+              user: null,
+              guild: null,
+              loading: false,
+              error: errData.message || "Access Denied: Guild not authorized.",
+              discordSdk: sdk,
+            });
+            return;
+          }
+          throw new Error("Failed to fetch user profile and guild from backend");
         }
 
-        // Validate guild ID if running inside Discord
-        if (!sdk.guildId || sdk.guildId !== ALLOWED_GUILD_ID) {
-          setContext({
-            isInDiscord: true,
-            user: discordUser,
-            guild: discordGuild,
-            loading: false,
-            error: `Access Denied: This activity is only authorized for the specified Discord server (Guild ID: ${ALLOWED_GUILD_ID}).`,
-            discordSdk: sdk,
-          });
-          return;
-        }
+        const meData = await meResponse.json();
 
         setContext({
           isInDiscord: true,
-          user: discordUser,
-          guild: discordGuild,
+          user: meData.user,
+          guild: meData.guild,
           loading: false,
           error: null,
           discordSdk: sdk,
@@ -235,7 +226,12 @@ export function useDiscord() {
 
         console.log("Entering Standalone Mode (Unauthenticated or Mock Fallback):", err instanceof Error ? err.message : String(err));
 
-        const ALLOWED_GUILD_ID = process.env.NEXT_PUBLIC_ALLOWED_GUILD_ID!;
+        const ALLOWED_GUILD_IDS = (process.env.NEXT_PUBLIC_ALLOWED_GUILD_ID || "")
+          .split(",")
+          .map(id => id.trim())
+          .filter(Boolean);
+        const primaryGuildId = ALLOWED_GUILD_IDS[0] || "mock-guild-1";
+
         let activeMockUser = null;
         if (process.env.NODE_ENV === "development") {
           const localMockUser = localStorage.getItem("gw2_mock_user");
@@ -250,7 +246,7 @@ export function useDiscord() {
         setContext({
           isInDiscord: false,
           user: activeMockUser,
-          guild: activeMockUser ? { id: ALLOWED_GUILD_ID, name: "Eternal Baguette [BAGU]" } : null,
+          guild: activeMockUser ? { id: primaryGuildId, name: "Cooperative Guild" } : null,
           loading: false,
           error: null,
           discordSdk: null,

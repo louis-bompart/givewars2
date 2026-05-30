@@ -38,7 +38,10 @@ export async function GET(req: Request) {
       avatarUrl,
     };
 
-    const ALLOWED_GUILD_ID = process.env.NEXT_PUBLIC_ALLOWED_GUILD_ID;
+    const ALLOWED_GUILD_IDS = (process.env.NEXT_PUBLIC_ALLOWED_GUILD_ID || "")
+      .split(",")
+      .map(id => id.trim())
+      .filter(Boolean);
 
     // 2. Fetch User Guilds
     let guild = null;
@@ -53,7 +56,7 @@ export async function GET(req: Request) {
       if (guildsResponse.ok) {
         const guildsData = await guildsResponse.json();
         if (Array.isArray(guildsData)) {
-          const matchedGuild = guildsData.find(g => g.id === ALLOWED_GUILD_ID);
+          const matchedGuild = guildsData.find(g => ALLOWED_GUILD_IDS.includes(g.id));
           if (matchedGuild) {
             isMemberOfAllowedGuild = true;
             guild = {
