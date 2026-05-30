@@ -1,0 +1,10 @@
+@import "../styles/gw2-theme.css";
+
+/* Additional app-wide overrides if necessary */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+}

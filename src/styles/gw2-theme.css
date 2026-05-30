@@ -1,0 +1,844 @@
+/* Guild Wars 2 Theme and Design System */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Cinzel:wght@500;600;700;800&display=swap');
+
+:root {
+  /* Colors */
+  --color-bg-dark: #0d0e10;
+  --color-bg-panel: rgba(20, 22, 26, 0.75);
+  --color-bg-hover: rgba(35, 38, 45, 0.85);
+
+  --color-gold-raw: 244, 176, 36;
+  --color-gold: rgb(var(--color-gold-raw));
+  --color-gold-light: rgba(var(--color-gold-raw), 0.8);
+  --color-gold-glow: rgba(var(--color-gold-raw), 0.25);
+  --color-gold-dark: #b88214;
+
+  --color-crimson: #a82b2b;
+  --color-crimson-hover: #c73c3c;
+  --color-crimson-glow: rgba(168, 43, 43, 0.4);
+
+  --color-text-primary: #dfd5c6;
+  --color-text-secondary: #a09789;
+  --color-text-dark: #1e2022;
+  --color-text-gold: #f4d068;
+
+  --border-gold: 1px solid rgba(var(--color-gold-raw), 0.3);
+  --border-gold-focus: 1px solid rgba(var(--color-gold-raw), 0.7);
+  --border-glass: 1px solid rgba(255, 255, 255, 0.07);
+
+  --shadow-gold: 0 0 15px rgba(var(--color-gold-raw), 0.15);
+  --shadow-gold-heavy: 0 0 25px rgba(var(--color-gold-raw), 0.35);
+  --shadow-crimson: 0 0 15px rgba(168, 43, 43, 0.3);
+
+  /* Fonts */
+  --font-header: 'Cinzel', serif;
+  --font-body: 'Outfit', sans-serif;
+
+  /* Layout */
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 16px;
+  --transition-speed: 0.25s;
+}
+
+/* Base resets & typography */
+body {
+  background-color: var(--color-bg-dark);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(var(--color-gold-raw), 0.08) 0%, transparent 60%),
+    radial-gradient(circle at 100% 100%, rgba(168, 43, 43, 0.04) 0%, transparent 50%),
+    radial-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 24px 24px;
+  background-attachment: fixed;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-header);
+  color: #fff;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  margin-top: 0;
+}
+
+/* App Layout Grid */
+.app-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* Glassmorphism Panel card */
+.gw-card {
+  background: var(--color-bg-panel);
+  border: var(--border-glass);
+  border-radius: var(--border-radius-lg);
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-speed) ease;
+}
+
+.gw-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(var(--color-gold-raw), 0.5), transparent);
+}
+
+.gw-card:hover {
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), var(--shadow-gold);
+  border-color: rgba(var(--color-gold-raw), 0.15);
+}
+
+/* Banner for Environment notification */
+.mock-banner {
+  background: linear-gradient(135deg, rgba(var(--color-gold-raw), 0.15) 0%, rgba(var(--color-gold-raw), 0.05) 100%);
+  border: var(--border-gold);
+  border-radius: var(--border-radius-md);
+  padding: 12px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-gold);
+  backdrop-filter: blur(8px);
+}
+
+.mock-badge {
+  background: var(--color-gold);
+  color: var(--color-bg-dark);
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* Tab Navigation styling */
+.tabs-nav {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 8px;
+  overflow-x: auto;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  font-family: var(--font-header);
+  font-size: 15px;
+  padding: 10px 18px;
+  cursor: pointer;
+  border-radius: var(--border-radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all var(--transition-speed) ease;
+  white-space: nowrap;
+}
+
+.tab-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-btn.active {
+  color: var(--color-text-gold);
+  background: rgba(var(--color-gold-raw), 0.1);
+  box-shadow: inset 0 0 10px rgba(var(--color-gold-raw), 0.15);
+  border: var(--border-gold);
+}
+
+/* Roll Dice Button (Epic RPG Button) */
+.btn-epic {
+  background: linear-gradient(135deg, #1f1b13 0%, #100c07 100%);
+  border: var(--border-gold);
+  color: var(--color-text-gold);
+  font-family: var(--font-header);
+  font-size: 16px;
+  font-weight: 700;
+  padding: 14px 28px;
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4), var(--shadow-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  transition: all var(--transition-speed) cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-epic::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 30%;
+  height: 200%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.13), transparent);
+  transform: rotate(30deg);
+  transition: none;
+}
+
+.btn-epic:hover::after {
+  left: 150%;
+  transition: left 0.8s ease-in-out;
+}
+
+.btn-epic:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5), var(--shadow-gold-heavy);
+  border-color: rgba(var(--color-gold-raw), 0.8);
+  color: #fff;
+}
+
+.btn-epic:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4), var(--shadow-gold);
+}
+
+.btn-epic:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-secondary);
+}
+
+.btn-crimson {
+  background: linear-gradient(135deg, #3d1414 0%, #1e0909 100%);
+  border: 1px solid rgba(168, 43, 43, 0.5);
+  color: #ff9e9e;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4), var(--shadow-crimson);
+}
+
+.btn-crimson:hover:not(:disabled) {
+  border-color: rgba(168, 43, 43, 0.9);
+  color: #fff;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5), var(--shadow-crimson);
+}
+
+/* Beautiful GW2 Item Badge component */
+.gw2-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: var(--border-radius-md);
+  padding: 12px 16px;
+  border-left: 4px solid var(--rarity-color, #a09789);
+  transition: all var(--transition-speed) ease;
+}
+
+.gw2-item:hover {
+  background: rgba(0, 0, 0, 0.6);
+  transform: scale(1.01);
+}
+
+.gw2-item-icon-container {
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  border: 1px solid var(--rarity-color, #a09789);
+  background: #111;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+.gw2-item-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gw2-item-details {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.gw2-item-name {
+  font-family: var(--font-body);
+  font-weight: 600;
+  color: var(--rarity-color, #fff);
+  font-size: 15px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.gw2-item-type {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+/* Rarity Colors representing GW2 UI colors */
+.rarity-Junk {
+  --rarity-color: #aaaaaa;
+}
+
+.rarity-Basic {
+  --rarity-color: #eeeeee;
+}
+
+.rarity-Fine {
+  --rarity-color: #62a4da;
+}
+
+.rarity-Masterwork {
+  --rarity-color: #1a9306;
+}
+
+.rarity-Rare {
+  --rarity-color: #fcd00d;
+}
+
+.rarity-Exotic {
+  --rarity-color: #ffa405;
+}
+
+.rarity-Ascended {
+  --rarity-color: #fb3e8d;
+}
+
+.rarity-Legendary {
+  --rarity-color: #9b3efb;
+}
+
+/* 3D d20 Dice Spinner */
+.dice-wrapper {
+  perspective: 1000px;
+  width: 140px;
+  height: 140px;
+  margin: 40px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.d20-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.7));
+  transform-style: preserve-3d;
+  transition: transform 0.1s linear;
+}
+
+.dice-number {
+  font-family: var(--font-header);
+  font-weight: 800;
+  font-size: 28px;
+  fill: #fff;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+/* Dice roll animation using 3D rotative simulations */
+@keyframes shake-roll {
+  0% {
+    transform: scale(1) rotate(0deg) translateY(0);
+  }
+
+  15% {
+    transform: scale(0.95) rotate(-15deg) translateY(10px);
+  }
+
+  30% {
+    transform: scale(1.05) rotate(20deg) translateY(-15deg);
+  }
+
+  45% {
+    transform: scale(0.9) rotate(-35deg) translateY(10px);
+  }
+
+  60% {
+    transform: scale(1.15) rotate(45deg) translateY(-20deg);
+  }
+
+  75% {
+    transform: scale(0.95) rotate(-10deg) translateY(5px);
+  }
+
+  90% {
+    transform: scale(1.05) rotate(15deg) translateY(-5deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg) translateY(0);
+  }
+}
+
+.dice-rolling {
+  animation: shake-roll 0.8s ease-in-out infinite;
+}
+
+/* Leaderboard */
+.leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.leaderboard-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-radius: var(--border-radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all var(--transition-speed) ease;
+}
+
+.leaderboard-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(var(--color-gold-raw), 0.15);
+}
+
+.leaderboard-row.winner {
+  background: linear-gradient(90deg, rgba(var(--color-gold-raw), 0.15) 0%, rgba(var(--color-gold-raw), 0.03) 100%);
+  border: 1px solid rgba(var(--color-gold-raw), 0.4);
+  box-shadow: inset 0 0 10px rgba(var(--color-gold-raw), 0.08);
+}
+
+.user-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar-mock {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-gold) 0%, var(--color-crimson) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.username {
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.roll-score {
+  font-family: var(--font-header);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text-gold);
+  text-shadow: 0 0 8px rgba(var(--color-gold-raw), 0.4);
+}
+
+.winner .roll-score {
+  color: #fff;
+  text-shadow: 0 0 15px var(--color-gold);
+}
+
+.user-status {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-needed {
+  background: rgba(26, 147, 6, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(26, 147, 6, 0.3);
+}
+
+.status-owned {
+  background: rgba(168, 43, 43, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(168, 43, 43, 0.3);
+}
+
+/* Profile inputs */
+.gw-input {
+  background: rgba(0, 0, 0, 0.4);
+  border: var(--border-glass);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: var(--border-radius-md);
+  font-family: var(--font-body);
+  font-size: 15px;
+  width: 100%;
+  box-sizing: border-box;
+  transition: all var(--transition-speed) ease;
+}
+
+.gw-input:focus {
+  outline: none;
+  border: var(--border-gold-focus);
+  box-shadow: 0 0 10px rgba(var(--color-gold-raw), 0.2);
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.input-label {
+  display: block;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Responsive grid */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 768px) {
+  .grid-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.flex-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.footer {
+  text-align: center;
+  margin-top: 40px;
+  padding: 20px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* --- DICE TRAY STYLING --- */
+
+.dice-tray-container {
+  background: radial-gradient(circle at 50% 50%, #1c1e24 0%, #0d0f12 100%);
+  border: 2px solid rgba(var(--color-gold-raw), 0.35);
+  border-radius: var(--border-radius-lg);
+  padding: 24px;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8), 0 10px 30px rgba(0, 0, 0, 0.6);
+  position: relative;
+}
+
+.dice-tray-container::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  border: 1px dashed rgba(var(--color-gold-raw), 0.15);
+  border-radius: calc(var(--border-radius-lg) - 4px);
+  pointer-events: none;
+}
+
+.dice-tray-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.dice-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: var(--border-radius-md);
+  padding: 14px 10px;
+  position: relative;
+  transition: all var(--transition-speed) cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.dice-slot:hover {
+  background: rgba(255, 255, 255, 0.04);
+  transform: translateY(-2px);
+  border-color: rgba(var(--color-gold-raw), 0.2);
+}
+
+.dice-slot.active-player {
+  background: rgba(var(--color-gold-raw), 0.04);
+  border: 1px solid rgba(var(--color-gold-raw), 0.3);
+  box-shadow: 0 0 12px rgba(var(--color-gold-raw), 0.08);
+}
+
+.dice-slot-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f4b024 0%, #a82b2b 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+  color: #fff;
+  margin-bottom: 6px;
+}
+
+.dice-slot-username {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  text-align: center;
+  max-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dice-slot-status {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Visual States for Dice slots */
+.dice-slot.deciding .d20-svg-tray {
+  opacity: 0.45;
+  animation: d20-float 3s ease-in-out infinite;
+  filter: grayscale(0.5);
+}
+
+.dice-slot.rolling .d20-svg-tray {
+  animation: d20-tray-shake 0.15s linear infinite;
+  filter: drop-shadow(0 0 10px rgba(var(--color-gold-raw), 0.8));
+}
+
+.dice-slot.passed {
+  opacity: 0.45;
+}
+
+.dice-slot.passed .d20-svg-tray {
+  filter: grayscale(0.9) contrast(0.7);
+}
+
+.dice-slot.ineligible {
+  opacity: 0.5;
+}
+
+.dice-slot.ineligible .d20-svg-tray {
+  filter: grayscale(1) brightness(0.6);
+}
+
+/* Custom visual die sizes for the tray */
+.tray-dice-wrapper {
+  width: 70px;
+  height: 70px;
+  margin: 10px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.d20-svg-tray {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.6));
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Glow effects for rolls */
+@keyframes leader-slot-glow {
+  0%, 100% {
+    border-color: rgba(var(--color-gold-raw), 0.4);
+    box-shadow: 0 0 12px rgba(var(--color-gold-raw), 0.15);
+    background: rgba(var(--color-gold-raw), 0.03);
+  }
+  50% {
+    border-color: rgba(var(--color-gold-raw), 0.95);
+    box-shadow: 0 0 24px rgba(var(--color-gold-raw), 0.45);
+    background: rgba(var(--color-gold-raw), 0.08);
+  }
+}
+
+.dice-slot.roll-leader {
+  animation: leader-slot-glow 2s ease-in-out infinite;
+}
+
+.dice-slot.roll-leader .d20-svg-tray {
+  filter: drop-shadow(0 0 15px rgba(var(--color-gold-raw), 0.95));
+}
+
+.dice-slot.roll-leader .dice-number {
+  animation: scale-up-pulse 1.5s ease-in-out infinite;
+  transform-origin: 50px 52px;
+}
+
+.dice-slot.roll-fumble {
+  border-color: rgba(168, 43, 43, 0.7);
+  box-shadow: 0 0 15px rgba(168, 43, 43, 0.25);
+  background: rgba(168, 43, 43, 0.05);
+}
+
+.dice-slot.roll-fumble .d20-svg-tray {
+  filter: drop-shadow(0 0 12px rgba(168, 43, 43, 0.9));
+}
+
+/* Micro animations for dice */
+
+@keyframes d20-float {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-4px) rotate(3deg);
+  }
+
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+}
+
+@keyframes d20-tray-shake {
+  0% {
+    transform: translate(1px, 1px) rotate(0deg);
+  }
+
+  10% {
+    transform: translate(-1px, -2px) rotate(-1deg);
+  }
+
+  20% {
+    transform: translate(-3px, 0px) rotate(1deg);
+  }
+
+  30% {
+    transform: translate(0px, 2px) rotate(0deg);
+  }
+
+  40% {
+    transform: translate(1px, -1px) rotate(1deg);
+  }
+
+  50% {
+    transform: translate(-1px, 2px) rotate(-1deg);
+  }
+
+  60% {
+    transform: translate(-3px, 1px) rotate(0deg);
+  }
+
+  70% {
+    transform: translate(2px, 1px) rotate(-1deg);
+  }
+
+  80% {
+    transform: translate(-1px, -1px) rotate(1deg);
+  }
+
+  90% {
+    transform: translate(2px, 2px) rotate(0deg);
+  }
+
+  100% {
+    transform: translate(1px, -2px) rotate(-1deg);
+  }
+}
+
+@keyframes scale-up-pulse {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.5);
+    fill: #fff;
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Crit / Fumble Badges */
+.tray-badge {
+  position: absolute;
+  top: -8px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.tray-badge.leader {
+  background: linear-gradient(135deg, var(--color-gold) 0%, var(--color-bg-dark) 100%);
+  color: var(--color-text-gold);
+  border: 1px solid var(--color-gold);
+}
+
+.tray-badge.fumble {
+  background: var(--color-crimson);
+  color: #fff;
+}
+
+/* Collaborative Queue Visual Indicators */
+
+.mock-pulse-dot {
+  width: 6px;
+  height: 6px;
+  background-color: #4ade80;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 8px #4ade80;
+  animation: mock-pulse 2s infinite ease-in-out;
+}
+
+@keyframes mock-pulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+    box-shadow: 0 0 8px 4px rgba(74, 222, 128, 0);
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.6;
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+  }
+}
