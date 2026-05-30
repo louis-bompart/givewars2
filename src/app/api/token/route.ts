@@ -34,12 +34,13 @@ export async function POST(req: Request) {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
       },
       body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
         grant_type: "authorization_code",
         code,
-        redirect_uri: decodeURIComponent(redirect_uri),
+        ...(redirect_uri && { redirect_uri: decodeURIComponent(redirect_uri) }),
       }),
     });
 
