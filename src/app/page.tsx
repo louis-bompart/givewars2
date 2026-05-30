@@ -11,7 +11,8 @@ import OrganizerPanel from "@/components/OrganizerPanel";
 import DiceTray from "@/components/DiceTray";
 import LootQueue from "@/components/LootQueue";
 import ApiKeyModal from "@/components/ApiKeyModal";
-import { Dices, Shield, ShieldAlert, Sparkles, RefreshCw, Gift } from "lucide-react";
+import LobbyBrowser from "@/components/LobbyBrowser";
+import { Dices, Shield, ShieldAlert, Sparkles, RefreshCw, Gift, Share2, LogOut } from "lucide-react";
 
 export default function Home() {
   const { isInDiscord, user, guild, loading, error, changeMockUser, mockUsers, logout, discordSdk } = useDiscord();
@@ -48,10 +49,61 @@ export default function Home() {
 
   const [peerQueues, setPeerQueues] = useState<Record<string, ProposedItem[]>>({});
 
+  const [selectedLobbyId, setSelectedLobbyId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Sync lobbyId from URL query parameter or sessionStorage on mount
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlLobbyId = urlParams.get("lobbyId") || urlParams.get("join");
+
+    if (urlLobbyId) {
+      setSelectedLobbyId(urlLobbyId);
+      sessionStorage.setItem("givewars2_active_lobby_id", urlLobbyId);
+      // Clean query parameters from URL without reloading
+      const cleanUrl = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, document.title, cleanUrl);
+      return;
+    }
+
+    const storedLobbyId = sessionStorage.getItem("givewars2_active_lobby_id");
+    if (storedLobbyId) {
+      setSelectedLobbyId(storedLobbyId);
+    }
+  }, []);
+
+  const handleJoinLobby = (lobbyId: string) => {
+    setSelectedLobbyId(lobbyId);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("givewars2_active_lobby_id", lobbyId);
+    }
+  };
+
+  const handleLeaveLobby = () => {
+    setSelectedLobbyId(null);
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("givewars2_active_lobby_id");
+    }
+  };
+
+  const handleShareInvite = () => {
+    if (typeof window === "undefined" || !instanceId) return;
+    const shareUrl = `${window.location.origin}/?lobbyId=${instanceId}`;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   const instanceId = React.useMemo(() => {
     if (!user) return null;
-    return discordSdk?.instanceId || guild?.id || "standalone-lobby";
-  }, [user, guild, discordSdk]);
+    if (isInDiscord && discordSdk?.instanceId) {
+      return discordSdk.instanceId;
+    }
+    return selectedLobbyId;
+  }, [user, isInDiscord, discordSdk, selectedLobbyId]);
 
   const {
     connectedPeers,
@@ -63,7 +115,12 @@ export default function Home() {
     instanceId,
     userId: user?.id || null,
     username: user?.username || null,
+    guildId: guild?.id || null,
+    guildName: guild?.name || null,
+    isDiscordActivity: isInDiscord,
     localQueue: proposalQueue,
+    activeItem,
+    rolls,
     onQueueUpdate: (peerUserId, queue) => {
       setPeerQueues((prev) => {
         const next = { ...prev };
@@ -462,6 +519,52 @@ export default function Home() {
         {/* User profile state snippet */}
         {user && (
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {instanceId && (
+              <button
+                onClick={handleShareInvite}
+                style={{
+                  background: copied ? "rgba(16, 185, 129, 0.15)" : "rgba(244, 176, 36, 0.12)",
+                  color: copied ? "#10b981" : "var(--color-text-gold)",
+                  border: copied ? "1px solid rgba(16, 185, 129, 0.3)" : "var(--border-gold)",
+                  padding: "6px 14px",
+                  borderRadius: "20px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  transition: "all 0.2s"
+                }}
+              >
+                <Share2 style={{ width: "12px", height: "12px" }} />
+                {copied ? "Link Copied!" : "Share Invite"}
+              </button>
+            )}
+
+            {!isInDiscord && selectedLobbyId && (
+              <button
+                onClick={handleLeaveLobby}
+                style={{
+                  background: "rgba(239, 68, 68, 0.15)",
+                  color: "#ef4444",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  padding: "6px 14px",
+                  borderRadius: "20px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  transition: "all 0.2s"
+                }}
+              >
+                <LogOut style={{ width: "12px", height: "12px" }} />
+                Leave Lobby
+              </button>
+            )}
+
             {connectedPeers.length > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.3)", padding: "6px 14px", borderRadius: "20px", fontSize: "12px", color: "#10b981", fontWeight: "600" }}>
                 <span className="pulse-indicator" style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#10b981", display: "inline-block" }}></span>
@@ -501,142 +604,148 @@ export default function Home() {
         )}
       </header>
 
-      {/* Standalone Browser (Mock Mode) Developer Bar */}
-      {!isInDiscord && process.env.NODE_ENV === "development" && (
-        <div className="mock-banner">
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span className="mock-badge">Mock Mode</span>
-            <span style={{ fontSize: "13px", color: "var(--color-text-primary)" }}>
-              Running outside Discord iframe. Simulated players are enabled for testing!
-            </span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Identity:</span>
-            <select
-              style={{
-                background: "rgba(0,0,0,0.6)",
-                color: "#fff",
-                border: "var(--border-gold)",
-                borderRadius: "4px",
-                padding: "4px 8px",
-                fontSize: "12px",
-                fontFamily: "var(--font-body)"
-              }}
-              value={user ? JSON.stringify(user) : ""}
-              onChange={(e) => {
-                if (e.target.value) {
-                  changeMockUser(JSON.parse(e.target.value));
-                }
-              }}
-            >
-              {mockUsers.map((mu) => (
-                <option key={mu.id} value={JSON.stringify(mu)}>
-                  {mu.username} ({mu.globalName})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
-
-      {/* Main Tab Controller navigation */}
-      <nav className="tabs-nav">
-        <button
-          className={`tab-btn ${activeTab === "roll" ? "active" : ""}`}
-          onClick={() => setActiveTab("roll")}
-        >
-          <Dices style={{ width: "16px", height: "16px" }} />
-          Dice Roll
-        </button>
-        <button
-          className={`tab-btn ${activeTab === "queue" ? "active" : ""}`}
-          onClick={() => setActiveTab("queue")}
-        >
-          <Gift style={{ width: "16px", height: "16px" }} />
-          Loot Queue ({displayedQueue.length})
-        </button>
-        <button
-          className={`tab-btn ${activeTab === "profile" ? "active" : ""}`}
-          onClick={() => setActiveTab("profile")}
-        >
-          <Shield style={{ width: "16px", height: "16px" }} />
-          GW2 Account
-        </button>
-        <button
-          className={`tab-btn ${activeTab === "organizer" ? "active" : ""}`}
-          onClick={() => setActiveTab("organizer")}
-        >
-          <ShieldAlert style={{ width: "16px", height: "16px" }} />
-          Organizer
-        </button>
-      </nav>
-
-      {/* Main Responsive Layout Body */}
-      <main style={{ flexGrow: 1 }}>
-
-        {/* Loot Queue Tab */}
-        {activeTab === "queue" && (
-          <LootQueue
-            proposalQueue={displayedQueue}
-            proposeItem={proposeItem}
-            launchNextProposedItem={handleLaunchNext}
-            activeItem={activeItem}
-            rolls={rolls}
-            rollingUsers={rollingUsers}
-            activeUser={user}
-            winner={winner}
-          />
-        )}
-
-        {/* Other Tabs */}
-        {activeTab !== "queue" && (
-          <div className="grid-2" style={{ gridTemplateColumns: activeTab === "roll" ? "1fr 1fr" : "1fr" }}>
-
-            {/* COLUMN 1: Active Tab Render */}
-            <div style={{ display: activeTab === "roll" ? "block" : "none" }}>
-              <DiceRoller
-                activeItem={activeItem}
-                user={user}
-                apiKey={apiKey}
-                onRollSubmitted={handleRollSubmitted}
-                rolls={rolls}
-                onOpenKeyModal={() => setShowKeyModal(true)}
-              />
+      {!instanceId ? (
+        <LobbyBrowser user={user} guild={guild} onJoinLobby={handleJoinLobby} />
+      ) : (
+        <>
+          {/* Standalone Browser (Mock Mode) Developer Bar */}
+          {!isInDiscord && process.env.NODE_ENV === "development" && (
+            <div className="mock-banner">
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span className="mock-badge">Mock Mode</span>
+                <span style={{ fontSize: "13px", color: "var(--color-text-primary)" }}>
+                  Running outside Discord iframe. Simulated players are enabled for testing!
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Identity:</span>
+                <select
+                  style={{
+                    background: "rgba(0,0,0,0.6)",
+                    color: "#fff",
+                    border: "var(--border-gold)",
+                    borderRadius: "4px",
+                    padding: "4px 8px",
+                    fontSize: "12px",
+                    fontFamily: "var(--font-body)"
+                  }}
+                  value={user ? JSON.stringify(user) : ""}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      changeMockUser(JSON.parse(e.target.value));
+                    }
+                  }}
+                >
+                  {mockUsers.map((mu) => (
+                    <option key={mu.id} value={JSON.stringify(mu)}>
+                      {mu.username} ({mu.globalName})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
+          )}
 
-            {activeTab === "profile" && (
-              <GW2Profile apiKey={apiKey} setApiKey={handleSaveApiKey} onFlushData={handleFlushData} />
-            )}
+          {/* Main Tab Controller navigation */}
+          <nav className="tabs-nav">
+            <button
+              className={`tab-btn ${activeTab === "roll" ? "active" : ""}`}
+              onClick={() => setActiveTab("roll")}
+            >
+              <Dices style={{ width: "16px", height: "16px" }} />
+              Dice Roll
+            </button>
+            <button
+              className={`tab-btn ${activeTab === "queue" ? "active" : ""}`}
+              onClick={() => setActiveTab("queue")}
+            >
+              <Gift style={{ width: "16px", height: "16px" }} />
+              Loot Queue ({displayedQueue.length})
+            </button>
+            <button
+              className={`tab-btn ${activeTab === "profile" ? "active" : ""}`}
+              onClick={() => setActiveTab("profile")}
+            >
+              <Shield style={{ width: "16px", height: "16px" }} />
+              GW2 Account
+            </button>
+            <button
+              className={`tab-btn ${activeTab === "organizer" ? "active" : ""}`}
+              onClick={() => setActiveTab("organizer")}
+            >
+              <ShieldAlert style={{ width: "16px", height: "16px" }} />
+              Organizer
+            </button>
+          </nav>
 
-            {activeTab === "organizer" && (
-              <OrganizerPanel
-                activeItem={activeItem}
-                startGiveaway={handleStartGiveaway}
-                endGiveaway={handleEndGiveaway}
-                simulateMockDecision={simulateMockDecision}
-                autoSimulateLobby={autoSimulateLobby}
+          {/* Main Responsive Layout Body */}
+          <main style={{ flexGrow: 1 }}>
+
+            {/* Loot Queue Tab */}
+            {activeTab === "queue" && (
+              <LootQueue
                 proposalQueue={displayedQueue}
+                proposeItem={proposeItem}
+                launchNextProposedItem={handleLaunchNext}
+                activeItem={activeItem}
                 rolls={rolls}
+                rollingUsers={rollingUsers}
+                activeUser={user}
                 winner={winner}
               />
             )}
 
-            {/* COLUMN 2: Sidebar (Shows Dice Tray on Roll tab) */}
-            {activeTab === "roll" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-                <DiceTray
-                  rolls={rolls}
-                  rollingUsers={rollingUsers}
-                  activeUser={user}
-                  activeItem={activeItem}
-                  winner={winner}
-                />
+            {/* Other Tabs */}
+            {activeTab !== "queue" && (
+              <div className="grid-2" style={{ gridTemplateColumns: activeTab === "roll" ? "1fr 1fr" : "1fr" }}>
+
+                {/* COLUMN 1: Active Tab Render */}
+                <div style={{ display: activeTab === "roll" ? "block" : "none" }}>
+                  <DiceRoller
+                    activeItem={activeItem}
+                    user={user}
+                    apiKey={apiKey}
+                    onRollSubmitted={handleRollSubmitted}
+                    rolls={rolls}
+                    onOpenKeyModal={() => setShowKeyModal(true)}
+                  />
+                </div>
+
+                {activeTab === "profile" && (
+                  <GW2Profile apiKey={apiKey} setApiKey={handleSaveApiKey} onFlushData={handleFlushData} />
+                )}
+
+                {activeTab === "organizer" && (
+                  <OrganizerPanel
+                    activeItem={activeItem}
+                    startGiveaway={handleStartGiveaway}
+                    endGiveaway={handleEndGiveaway}
+                    simulateMockDecision={simulateMockDecision}
+                    autoSimulateLobby={autoSimulateLobby}
+                    proposalQueue={displayedQueue}
+                    rolls={rolls}
+                    winner={winner}
+                  />
+                )}
+
+                {/* COLUMN 2: Sidebar (Shows Dice Tray on Roll tab) */}
+                {activeTab === "roll" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                    <DiceTray
+                      rolls={rolls}
+                      rollingUsers={rollingUsers}
+                      activeUser={user}
+                      activeItem={activeItem}
+                      winner={winner}
+                    />
+                  </div>
+                )}
+
               </div>
             )}
-
-          </div>
-        )}
-      </main>
+          </main>
+        </>
+      )}
 
       {/* Footer */}
       <footer className="footer">

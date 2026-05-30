@@ -7,7 +7,12 @@ interface WebRTCProps {
   instanceId: string | null;
   userId: string | null;
   username: string | null;
+  guildId: string | null;
+  guildName: string | null;
+  isDiscordActivity: boolean;
   localQueue: ProposedItem[];
+  activeItem: any;
+  rolls: any[];
   onQueueUpdate: (peerUserId: string, queue: ProposedItem[]) => void;
   onRoll: (peerUserId: string, username: string, roll: number, hasItem: boolean) => void;
   onActiveItem: (item: any) => void;
@@ -19,7 +24,12 @@ export function useWebRTC({
   instanceId,
   userId,
   username,
+  guildId,
+  guildName,
+  isDiscordActivity,
   localQueue,
+  activeItem,
+  rolls,
   onQueueUpdate,
   onRoll,
   onActiveItem,
@@ -27,15 +37,35 @@ export function useWebRTC({
   onConsumeProposal,
 }: WebRTCProps) {
   const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
+  const connectedPeersRef = useRef<string[]>(connectedPeers);
+  
+  useEffect(() => {
+    connectedPeersRef.current = connectedPeers;
+  }, [connectedPeers]);
+
   const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
   const dataChannels = useRef<Record<string, RTCDataChannel>>({});
   const pendingCandidates = useRef<Record<string, RTCIceCandidateInit[]>>({});
   const localQueueRef = useRef<ProposedItem[]>(localQueue);
+  const activeItemRef = useRef<any>(activeItem);
+  const rollsRef = useRef<any[]>(rolls);
+  const localRollRef = useRef<any>(null);
 
   // Keep localQueueRef up to date so we always broadcast the latest version
   useEffect(() => {
     localQueueRef.current = localQueue;
   }, [localQueue]);
+
+  // Keep activeItemRef up to date
+  useEffect(() => {
+    activeItemRef.current = activeItem;
+  }, [activeItem]);
+
+  // Keep rollsRef up to date
+  useEffect(() => {
+    rollsRef.current = rolls;
+    localRollRef.current = rolls.find((r) => r.userId === userId) || null;
+  }, [rolls, userId]);
 
   // STUN Servers for ICE gathering (free public Google STUN servers)
   const rtcConfig: RTCConfiguration = {
@@ -57,6 +87,9 @@ export function useWebRTC({
           instanceId,
           userId,
           username,
+          guildId,
+          guildName,
+          isDiscordActivity,
           signals: [
             {
               to,
@@ -109,18 +142,59 @@ export function useWebRTC({
   const setupDataChannel = (peerUserId: string, channel: RTCDataChannel) => {
     dataChannels.current[peerUserId] = channel;
 
-    channel.onopen = () => {
-      console.log(`[WebRTC] Data channel OPENED with ${peerUserId}`);
-      // Send our current local queue immediately upon connection!
+    const handleOpen = () => {
+      console.log(`[WebRTC] Data channel OPENED/READY with ${peerUserId}`);
+      
+      // 1. Send our current local queue immediately upon connection!
       if (localQueueRef.current.length > 0) {
-        channel.send(
-          JSON.stringify({
-            type: "queue-sync",
-            data: localQueueRef.current,
-          })
-        );
+        try {
+          channel.send(
+            JSON.stringify({
+              type: "queue-sync",
+              data: localQueueRef.current,
+            })
+          );
+        } catch (err) {
+          console.error("Failed to send queue sync on open:", err);
+        }
+      }
+
+      // 2. Send active item if one is running
+      if (activeItemRef.current) {
+        try {
+          channel.send(
+            JSON.stringify({
+              type: "active-item",
+              data: activeItemRef.current,
+            })
+          );
+        } catch (err) {
+          console.error("Failed to send active item on open:", err);
+        }
+      }
+
+      // 3. Send all current rolls in progress
+      if (rollsRef.current.length > 0) {
+        try {
+          rollsRef.current.forEach((r) => {
+            channel.send(
+              JSON.stringify({
+                type: "dice-roll",
+                data: { username: r.username, roll: r.roll, hasItem: r.hasItem },
+              })
+            );
+          });
+        } catch (err) {
+          console.error("Failed to send dice rolls on open:", err);
+        }
       }
     };
+
+    if (channel.readyState === "open") {
+      handleOpen();
+    } else {
+      channel.onopen = handleOpen;
+    }
 
     channel.onmessage = (event) => {
       try {
@@ -247,7 +321,7 @@ export function useWebRTC({
     if (!instanceId || !userId || !username) return;
 
     let isMounted = true;
-    let pollInterval: NodeJS.Timeout;
+    let timerId: NodeJS.Timeout;
 
     const performLobbyHeartbeat = async () => {
       try {
@@ -258,15 +332,47 @@ export function useWebRTC({
             instanceId,
             userId,
             username,
+            guildId,
+            guildName,
+            isDiscordActivity,
             signals: [], // Heartbeats don't send active signals unless queued
+            queue: localQueueRef.current,
+            roll: localRollRef.current?.roll,
+            hasItem: localRollRef.current?.hasItem,
+            activeItem: activeItemRef.current,
           }),
         });
 
         if (!response.ok || !isMounted) return;
 
-        const { participants, signals } = await response.json();
+        const { participants, signals, activeItem: dbActiveItem } = await response.json();
 
-        // 1. Process active peer list and handle removals
+        // 1. Database Fallback Sync (Snappy sync if WebRTC fails/guest mode)
+        if (participants) {
+          participants.forEach((peer: any) => {
+            if (peer.userId !== userId) {
+              // Sync peer's suggestion queue
+              if (peer.queue) {
+                onQueueUpdate(peer.userId, peer.queue);
+              }
+              // Sync peer's dice rolls
+              if (peer.roll !== undefined && peer.roll !== null) {
+                onRoll(peer.userId, peer.username, peer.roll, peer.hasItem);
+              }
+            }
+          });
+        }
+
+        // Sync active giveaway item
+        if (dbActiveItem !== undefined) {
+          if (dbActiveItem && (!activeItemRef.current || activeItemRef.current.id !== dbActiveItem.id)) {
+            onActiveItem(dbActiveItem);
+          } else if (!dbActiveItem && activeItemRef.current) {
+            onEndGiveaway();
+          }
+        }
+
+        // 2. Process active peer list and handle WebRTC removals
         const activeUserIds: string[] = (participants || [])
           .map((p: any) => p.userId)
           .filter((id: string) => id !== userId);
@@ -279,7 +385,7 @@ export function useWebRTC({
           }
         });
 
-        // 2. Initiate connections with newer peers
+        // 3. Initiate connections with newer peers
         // Connection rule: lexicographically larger ID initiates connection to lower ID
         for (const peer of participants || []) {
           const peerId = peer.userId;
@@ -303,7 +409,7 @@ export function useWebRTC({
           }
         }
 
-        // 3. Process incoming signaling messages
+        // 4. Process incoming WebRTC signaling messages
         for (const sig of signals || []) {
           const peerId = sig.from;
           if (sig.type === "offer") {
@@ -381,17 +487,24 @@ export function useWebRTC({
       }
     };
 
-    // Run immediately, then poll every 8 seconds
-    performLobbyHeartbeat();
-    pollInterval = setInterval(performLobbyHeartbeat, 8000);
+    const tick = async () => {
+      await performLobbyHeartbeat();
+      if (!isMounted) return;
+      // Self-tuning dynamic heartbeat: poll snappy every 3 seconds if alone (fallback sync),
+      // and scale back to 8 seconds once WebRTC peers are connected.
+      const delay = connectedPeersRef.current.length === 0 ? 3000 : 8000;
+      timerId = setTimeout(tick, delay);
+    };
+
+    tick();
 
     return () => {
       isMounted = false;
-      clearInterval(pollInterval);
+      clearTimeout(timerId);
       // Clean up all active connections when unmounting
       Object.keys(peerConnections.current).forEach((peerId) => cleanupPeer(peerId));
     };
-  }, [instanceId, userId, username]);
+  }, [instanceId, userId, username, guildId, guildName, isDiscordActivity]);
 
   // Proactively broadcast local queue when it changes
   useEffect(() => {
