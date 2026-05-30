@@ -23,7 +23,7 @@ interface DiceTrayProps {
 }
 
 export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, winner }: DiceTrayProps) {
-  
+
   if (!activeItem) {
     return (
       <div className="gw-card flex-center" style={{ minHeight: "350px", textAlign: "center", justifyContent: "center" }}>
@@ -57,16 +57,18 @@ export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, 
   }
 
   // 2. Add standard simulated guild members (excluding current user to avoid duplicates)
-  LOBBY_PLAYERS.forEach(player => {
-    if (!activeUser || activeUser.id !== player.id) {
-      sessionParticipants.push({
-        id: player.id,
-        username: player.username,
-        globalName: player.globalName,
-        isActivePlayer: false
-      });
-    }
-  });
+  if (process.env.NODE_ENV === "development") {
+    LOBBY_PLAYERS.forEach(player => {
+      if (!activeUser || activeUser.id !== player.id) {
+        sessionParticipants.push({
+          id: player.id,
+          username: player.username,
+          globalName: player.globalName,
+          isActivePlayer: false
+        });
+      }
+    });
+  }
 
   // 3. Add any other players who have rolled (e.g. previous mock identities that rolled)
   rolls.forEach(roll => {
@@ -106,7 +108,7 @@ export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, 
           // Find if this player has submitted a roll
           const userRoll = rolls.find(r => r.userId === participant.id);
           const isRolling = rollingUsers[participant.id];
-          
+
           let slotState: "deciding" | "rolling" | "passed" | "ineligible" | "rolled" = "deciding";
           let rollValue = userRoll ? userRoll.roll : null;
           let ownsItem = userRoll ? userRoll.hasItem : false;
@@ -143,10 +145,10 @@ export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, 
               {isFumble && <span className="tray-badge fumble">Fumble!</span>}
 
               {/* Avatar */}
-              <div 
-                className="dice-slot-avatar" 
-                style={{ 
-                  background: participant.isActivePlayer 
+              <div
+                className="dice-slot-avatar"
+                style={{
+                  background: participant.isActivePlayer
                     ? "linear-gradient(135deg, var(--color-gold) 0%, var(--color-crimson) 100%)"
                     : slotState === "passed" || slotState === "ineligible"
                       ? "#30323a"
@@ -168,7 +170,7 @@ export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, 
               </div>
 
               {/* Status Subtext */}
-              <span 
+              <span
                 className="dice-slot-status"
                 style={{
                   color: isRolling
@@ -269,25 +271,25 @@ function TrayDieState({ slotState, rollValue, isLeader, isFumble }: { slotState:
   return (
     <svg className="d20-svg-tray" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
       <polygon points="50,5 90,30 90,70 50,95 10,70 10,30" fill={outerFill} stroke={strokeColor} strokeWidth="1.2" />
-      
+
       {/* Dynamic facets */}
       <polygon points="50,5 50,35 90,30" fill={isLeader ? "#332208" : isFumble ? "#300e0e" : "#202229"} stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
       <polygon points="50,5 10,30 50,35" fill={isLeader ? "#38250b" : isFumble ? "#361010" : "#242730"} stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
-      
+
       {/* Main triangular cap */}
       <polygon points="50,35 70,50 50,65" fill={centerFill1} stroke={strokeColor} strokeWidth="1.2" />
       <polygon points="50,35 50,65 30,50" fill={centerFill2} stroke={strokeColor} strokeWidth="1.2" />
-      
+
       {/* Number text */}
-      <text 
-        x="50" 
-        y="52" 
+      <text
+        x="50"
+        y="52"
         className="dice-number"
         fontSize="24"
         fontFamily="var(--font-header)"
         fontWeight="800"
         fill={isLeader ? "var(--color-gold)" : isFumble ? "#f87171" : "#fff"}
-        textAnchor="middle" 
+        textAnchor="middle"
         dominantBaseline="central"
       >
         {rollValue}
