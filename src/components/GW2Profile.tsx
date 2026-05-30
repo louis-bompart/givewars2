@@ -6,6 +6,7 @@ import { Key, Shield, User, Award, Clock, Heart, Sparkles } from "lucide-react";
 interface GW2ProfileProps {
   apiKey: string;
   setApiKey: (key: string) => void;
+  onFlushData: () => Promise<boolean | string>;
 }
 
 interface GW2AccountDetails {
@@ -17,10 +18,11 @@ interface GW2AccountDetails {
   commander: boolean;
 }
 
-export default function GW2Profile({ apiKey, setApiKey }: GW2ProfileProps) {
+export default function GW2Profile({ apiKey, setApiKey, onFlushData }: GW2ProfileProps) {
   const [inputKey, setInputKey] = useState(apiKey);
   const [account, setAccount] = useState<GW2AccountDetails | null>(null);
   const [loading, setLoading] = useState(false);
+  const [flushing, setFlushing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unlockedCount, setUnlockedCount] = useState<{ skins: number; dyes: number; minis: number; novelties: number }>({
     skins: 0,
@@ -31,6 +33,8 @@ export default function GW2Profile({ apiKey, setApiKey }: GW2ProfileProps) {
 
   // Verify and fetch GW2 Account details when API key is loaded
   useEffect(() => {
+    setInputKey(apiKey);
+
     if (!apiKey) {
       setAccount(null);
       return;
@@ -96,6 +100,29 @@ export default function GW2Profile({ apiKey, setApiKey }: GW2ProfileProps) {
     setUnlockedCount({ skins: 0, dyes: 0, minis: 0, novelties: 0 });
   };
 
+  const handleFlushDataClick = async () => {
+    const isConfirmed = window.confirm(
+      "⚠️ WARNING: This will permanently delete your Guild Wars 2 API Key and all associated integration records from MongoDB Atlas. This action cannot be undone.\n\nAre you sure you want to proceed?"
+    );
+    if (!isConfirmed) return;
+
+    setFlushing(true);
+    setError(null);
+    try {
+      const result = await onFlushData();
+      if (typeof result === "string") {
+        setError(result);
+      } else {
+        handleClearKey();
+      }
+    } catch (err) {
+      console.error("Flush data error:", err);
+      setError("Failed to purge database records. Please try again.");
+    } finally {
+      setFlushing(false);
+    }
+  };
+
   // Convert playtime in seconds to readable hours
   const formatPlaytime = (seconds: number) => {
     return Math.floor(seconds / 3600).toLocaleString();
@@ -129,7 +156,7 @@ export default function GW2Profile({ apiKey, setApiKey }: GW2ProfileProps) {
               onChange={(e) => setInputKey(e.target.value)}
               disabled={loading}
             />
-            {apiKey ? (
+            {apiKey && inputKey.trim() === apiKey ? (
               <button
                 type="button"
                 className="btn-epic btn-crimson"
@@ -143,7 +170,7 @@ export default function GW2Profile({ apiKey, setApiKey }: GW2ProfileProps) {
                 type="submit"
                 className="btn-epic"
                 style={{ padding: "12px 24px", fontSize: "14px" }}
-                disabled={loading}
+                disabled={loading || !inputKey.trim() || inputKey.trim() === apiKey}
               >
                 Save
               </button>
@@ -196,7 +223,7 @@ export default function GW2Profile({ apiKey, setApiKey }: GW2ProfileProps) {
                 <div style={{ fontSize: "15px", fontWeight: "600", color: "#fff" }}>{formatPlaytime(account.age)} hrs</div>
               </div>
             </div>
-            
+
             <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "12px", borderRadius: "var(--border-radius-md)", border: "var(--border-glass)", display: "flex", alignItems: "center", gap: "10px" }}>
               <Award style={{ color: "var(--color-gold)", width: "20px", height: "20px" }} />
               <div>
@@ -221,6 +248,42 @@ export default function GW2Profile({ apiKey, setApiKey }: GW2ProfileProps) {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {apiKey && (
+        <div style={{
+          borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+          paddingTop: "20px",
+          marginTop: "10px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "16px"
+        }}>
+          <div style={{ flexGrow: 1, minWidth: "240px" }}>
+            <span style={{ fontSize: "14px", fontWeight: "600", color: "#fff", display: "block", marginBottom: "2px" }}>
+              🔒 Privacy Center
+            </span>
+            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.4", display: "block" }}>
+              Permanently flush and wipe your data from GiveWars2.
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn-epic btn-crimson"
+            onClick={handleFlushDataClick}
+            disabled={flushing || loading}
+            style={{
+              padding: "10px 18px",
+              fontSize: "12px",
+              letterSpacing: "0.5px",
+              boxShadow: "none"
+            }}
+          >
+            {flushing ? "Purging Data..." : "Flush All My Data"}
+          </button>
         </div>
       )}
     </div>

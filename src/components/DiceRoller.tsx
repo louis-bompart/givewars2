@@ -10,9 +10,10 @@ interface DiceRollerProps {
   apiKey: string;
   onRollSubmitted: (rollValue: number, hasItem: boolean) => void;
   rolls: ParticipantRoll[];
+  onOpenKeyModal: () => void;
 }
 
-export default function DiceRoller({ activeItem, user, apiKey, onRollSubmitted, rolls }: DiceRollerProps) {
+export default function DiceRoller({ activeItem, user, apiKey, onRollSubmitted, rolls, onOpenKeyModal }: DiceRollerProps) {
   const [isRolling, setIsRolling] = useState(false);
   const [currentRoll, setCurrentRoll] = useState<number | null>(null);
   const [hasItem, setHasItem] = useState<boolean>(false);
@@ -231,11 +232,39 @@ export default function DiceRoller({ activeItem, user, apiKey, onRollSubmitted, 
           )}
         </div>
       ) : (
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "var(--border-radius-md)" }}>
-          <HelpCircle style={{ color: "var(--color-text-secondary)" }} />
-          <span style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>
-            💡 Connect your <strong>GW2 API Key</strong> in the profile tab to enable automatic ownership checks and qualify for give aways!
-          </span>
+        <div style={{ 
+          display: "flex", 
+          alignItems: "center", 
+          gap: "12px", 
+          padding: "14px 18px", 
+          background: "rgba(244, 176, 36, 0.04)", 
+          border: "1px solid rgba(244, 176, 36, 0.15)", 
+          borderRadius: "var(--border-radius-md)",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+          boxSizing: "border-box",
+          width: "100%"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexGrow: 1, minWidth: "200px" }}>
+            <HelpCircle style={{ color: "var(--color-text-gold)", width: "18px", height: "18px", minWidth: "18px" }} />
+            <span style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: "1.4" }}>
+              Connect your <strong>GW2 API Key</strong> to qualify for active giveaways and enable automatic inventory eligibility scanning!
+            </span>
+          </div>
+          <button 
+            className="btn-epic" 
+            onClick={onOpenKeyModal}
+            style={{ 
+              padding: "6px 14px", 
+              fontSize: "12px", 
+              letterSpacing: "0.5px", 
+              marginTop: "4px",
+              background: "linear-gradient(135deg, rgba(var(--color-gold-raw), 0.12) 0%, rgba(var(--color-gold-raw), 0.04) 100%)",
+              boxShadow: "none"
+            }}
+          >
+            Setup Key
+          </button>
         </div>
       )}
 

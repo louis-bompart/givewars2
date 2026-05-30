@@ -8,6 +8,7 @@ import GW2Profile from "@/components/GW2Profile";
 import OrganizerPanel from "@/components/OrganizerPanel";
 import DiceTray from "@/components/DiceTray";
 import LootQueue from "@/components/LootQueue";
+import ApiKeyModal from "@/components/ApiKeyModal";
 import { Dices, Shield, ShieldAlert, Sparkles, RefreshCw, Gift } from "lucide-react";
 
 export default function Home() {
@@ -28,7 +29,7 @@ export default function Home() {
   } = useGiveaway();
   const [activeTab, setActiveTab] = useState<"roll" | "queue" | "profile" | "organizer">("roll");
 
-  // Custom API Key storage (persists locally in user's browser)
+  // Custom API Key storage (persists locally in user's browser as a fast-load fallback)
   const [apiKey, setApiKey] = React.useState<string>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("gw2_api_key") || "";
@@ -36,12 +37,115 @@ export default function Home() {
     return "";
   });
 
-  const handleSaveApiKey = (key: string) => {
-    setApiKey(key);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("gw2_api_key", key);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [hasAutoOpened, setHasAutoOpened] = useState(false);
+
+  // Load API Key from database when Discord user identity is resolved
+  React.useEffect(() => {
+    if (!user) return;
+
+    const userId = user.id;
+
+    async function loadDbApiKey() {
+      try {
+        const response = await fetch(`/api/gw2/apikey?userId=${userId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.apiKey !== undefined) {
+            setApiKey(data.apiKey);
+            if (typeof window !== "undefined") {
+              if (data.apiKey) {
+                localStorage.setItem("gw2_api_key", data.apiKey);
+              } else {
+                localStorage.removeItem("gw2_api_key");
+              }
+            }
+
+            // Auto-open modal once if they don't have an API key configured yet
+            if (!data.apiKey && !hasAutoOpened) {
+              setShowKeyModal(true);
+              setHasAutoOpened(true);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load API key from database:", err);
+      }
     }
+
+    loadDbApiKey();
+  }, [user, hasAutoOpened]);
+
+  const handleSaveApiKey = async (key: string): Promise<boolean | string> => {
+    const trimmedKey = key.trim();
+    setApiKey(trimmedKey);
+    
+    if (typeof window !== "undefined") {
+      if (trimmedKey) {
+        localStorage.setItem("gw2_api_key", trimmedKey);
+      } else {
+        localStorage.removeItem("gw2_api_key");
+      }
+    }
+
+    if (user) {
+      try {
+        const response = await fetch("/api/gw2/apikey", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.id,
+            username: user.username,
+            apiKey: trimmedKey,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          const errMsg = errorData.error || "Failed to sync API key with database.";
+          console.error("Failed to sync API key with database:", errMsg);
+          return errMsg;
+        } else {
+          console.log("Successfully synced API key with database!");
+          return true;
+        }
+      } catch (err) {
+        console.error("Error syncing API key with database:", err);
+        return "Failed to connect to database. Please check your network connection.";
+      }
+    }
+    return true;
   };
+
+  const handleFlushData = async (): Promise<boolean | string> => {
+    setApiKey("");
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("gw2_api_key");
+    }
+
+    if (user) {
+      try {
+        const response = await fetch(`/api/gw2/apikey?userId=${user.id}`, {
+          method: "DELETE",
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          const errMsg = errorData.error || "Failed to flush data from database.";
+          console.error("Failed to flush data from database:", errMsg);
+          return errMsg;
+        } else {
+          console.log("Successfully flushed all user data from database!");
+          return true;
+        }
+      } catch (err) {
+        console.error("Error flushing data from database:", err);
+        return "Failed to connect to database. Please check your network connection.";
+      }
+    }
+    return true;
+  };
+
 
   const handleRollSubmitted = (rollValue: number, hasItem: boolean) => {
     if (!user) return;
@@ -188,11 +292,12 @@ export default function Home() {
                 apiKey={apiKey}
                 onRollSubmitted={handleRollSubmitted}
                 rolls={rolls}
+                onOpenKeyModal={() => setShowKeyModal(true)}
               />
             </div>
 
             {activeTab === "profile" && (
-              <GW2Profile apiKey={apiKey} setApiKey={handleSaveApiKey} />
+              <GW2Profile apiKey={apiKey} setApiKey={handleSaveApiKey} onFlushData={handleFlushData} />
             )}
 
             {activeTab === "organizer" && (
@@ -238,6 +343,14 @@ export default function Home() {
           This application is not affiliated with ArenaNet, Guild Wars 2, or NCSOFT. All GW2 assets belong to their respective creators.
         </div>
       </footer>
+
+      {/* API Key Instructions & Connect Modal */}
+      <ApiKeyModal
+        isOpen={showKeyModal}
+        onClose={() => setShowKeyModal(false)}
+        onSave={handleSaveApiKey}
+        initialKey={apiKey}
+      />
     </div>
   );
 }
