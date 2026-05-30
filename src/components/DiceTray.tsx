@@ -109,17 +109,19 @@ export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, 
           const userRoll = rolls.find(r => r.userId === participant.id);
           const isRolling = rollingUsers[participant.id];
 
-          let slotState: "deciding" | "rolling" | "passed" | "ineligible" | "rolled" = "deciding";
+          let slotState: "deciding" | "rolling" | "passed" | "ineligible" | "rolled" | "rolled-for-fun" = "deciding";
           let rollValue = userRoll ? userRoll.roll : null;
           let ownsItem = userRoll ? userRoll.hasItem : false;
 
           if (isRolling) {
             slotState = "rolling";
           } else if (userRoll) {
-            if (ownsItem || rollValue === 0) {
-              slotState = "ineligible";
-            } else if (rollValue === -1) {
+            if (rollValue === -1) {
               slotState = "passed";
+            } else if (ownsItem && rollValue !== null && rollValue > 0) {
+              slotState = "rolled-for-fun";
+            } else if (ownsItem || rollValue === 0) {
+              slotState = "ineligible";
             } else {
               slotState = "rolled";
             }
@@ -127,7 +129,7 @@ export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, 
 
           // Leader & Fumble states
           const isLeader = winner !== null && winner.userId === participant.id;
-          const isFumble = slotState === "rolled" && rollValue === 1;
+          const isFumble = (slotState === "rolled" || slotState === "rolled-for-fun") && rollValue === 1;
 
           let slotClass = "dice-slot";
           if (participant.isActivePlayer) slotClass += " active-player";
@@ -135,6 +137,7 @@ export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, 
           if (slotState === "rolling") slotClass += " rolling";
           if (slotState === "passed") slotClass += " passed";
           if (slotState === "ineligible") slotClass += " ineligible";
+          if (slotState === "rolled-for-fun") slotClass += " ineligible rolled-for-fun";
           if (isLeader) slotClass += " roll-leader";
           if (isFumble) slotClass += " roll-fumble";
 
@@ -150,7 +153,7 @@ export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, 
                 style={{
                   background: participant.isActivePlayer
                     ? "linear-gradient(135deg, var(--color-gold) 0%, var(--color-crimson) 100%)"
-                    : slotState === "passed" || slotState === "ineligible"
+                    : slotState === "passed" || slotState === "ineligible" || slotState === "rolled-for-fun"
                       ? "#30323a"
                       : "linear-gradient(135deg, #424656 0%, #202229 100%)"
                 }}
@@ -181,7 +184,9 @@ export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, 
                         ? "var(--color-text-secondary)"
                         : slotState === "ineligible"
                           ? "#ef4444"
-                          : "var(--color-text-secondary)"
+                          : slotState === "rolled-for-fun"
+                            ? "#ffa4a4"
+                            : "var(--color-text-secondary)"
                 }}
               >
                 {isRolling ? (
@@ -192,6 +197,8 @@ export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, 
                   "Passed"
                 ) : slotState === "ineligible" ? (
                   "Ineligible"
+                ) : slotState === "rolled-for-fun" ? (
+                  `Rolled ${rollValue} (For Fun)`
                 ) : (
                   "Thinking..."
                 )}
@@ -241,6 +248,48 @@ function TrayDieState({ slotState, rollValue, isLeader, isFumble }: { slotState:
         </svg>
         <div style={{ position: "absolute", background: "rgba(0,0,0,0.6)", borderRadius: "50%", padding: "6px", border: "1px solid rgba(239,68,68,0.4)" }}>
           <Lock style={{ color: "#ef4444", width: "16px", height: "16px" }} />
+        </div>
+      </div>
+    );
+  }
+
+  // 4. Rolled For Fun State (Crimson ineligible tint, actual number, corner lock)
+  if (slotState === "rolled-for-fun") {
+    const strokeColor = "#a82b2b"; // dark red
+    const centerFill1 = "#251212"; // very dark red
+    const centerFill2 = "#1f0f0f";
+    const outerFill = "#130909";
+
+    return (
+      <div style={{ position: "relative", width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <svg className="d20-svg-tray" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="50,5 90,30 90,70 50,95 10,70 10,30" fill={outerFill} stroke={strokeColor} strokeWidth="1.2" />
+
+          {/* Dynamic facets */}
+          <polygon points="50,5 50,35 90,30" fill="#1b1212" stroke="rgba(255,255,255,0.02)" strokeWidth="0.5" />
+          <polygon points="50,5 10,30 50,35" fill="#1f1414" stroke="rgba(255,255,255,0.02)" strokeWidth="0.5" />
+
+          {/* Main triangular cap */}
+          <polygon points="50,35 70,50 50,65" fill={centerFill1} stroke={strokeColor} strokeWidth="1.2" />
+          <polygon points="50,35 50,65 30,50" fill={centerFill2} stroke={strokeColor} strokeWidth="1.2" />
+
+          {/* Number text */}
+          <text
+            x="50"
+            y="52"
+            className="dice-number"
+            fontSize="24"
+            fontFamily="var(--font-header)"
+            fontWeight="800"
+            fill="#ff9e9e"
+            textAnchor="middle"
+            dominantBaseline="central"
+          >
+            {rollValue}
+          </text>
+        </svg>
+        <div style={{ position: "absolute", bottom: "-2px", right: "-2px", background: "rgba(0,0,0,0.85)", borderRadius: "50%", padding: "4px", border: "1px solid rgba(168,43,43,0.5)" }}>
+          <Lock style={{ color: "#ff9e9e", width: "10px", height: "10px" }} />
         </div>
       </div>
     );
