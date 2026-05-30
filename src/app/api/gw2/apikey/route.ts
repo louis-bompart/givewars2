@@ -19,6 +19,9 @@ export async function GET(req: Request) {
 
     // Check if MongoDB client is available
     if (!clientPromise) {
+      if (process.env.NODE_ENV !== "development") {
+        return NextResponse.json({ error: "Database configuration is missing. Please contact the administrator." }, { status: 500 });
+      }
       console.warn(`[Mock DB] Fetching and decrypting GW2 API Key for Discord user: ${userId}`);
       const rawEncrypted = mockDbKeys[userId] || "";
       const apiKey = decrypt(rawEncrypted);
@@ -75,6 +78,9 @@ export async function POST(req: Request) {
 
     // 3. Persist in database (or mock fallback)
     if (!clientPromise) {
+      if (process.env.NODE_ENV !== "development") {
+        return NextResponse.json({ error: "Database configuration is missing. Please contact the administrator." }, { status: 500 });
+      }
       console.warn(`[Mock DB] Encrypting and saving GW2 API Key for Discord user: ${userId} (${username})`);
       mockDbKeys[userId] = securedKey;
       return NextResponse.json({ success: true, apiKey: trimmedKey, mocked: true });
@@ -114,6 +120,9 @@ export async function DELETE(req: Request) {
 
     // Handle mock database flush
     if (!clientPromise) {
+      if (process.env.NODE_ENV !== "development") {
+        return NextResponse.json({ error: "Database configuration is missing. Please contact the administrator." }, { status: 500 });
+      }
       console.warn(`[Mock DB] Permanently purging data for Discord user: ${userId}`);
       delete mockDbKeys[userId];
       return NextResponse.json({ success: true, mocked: true });

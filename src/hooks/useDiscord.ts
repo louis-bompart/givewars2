@@ -60,13 +60,74 @@ export function useDiscord() {
     let sdkInstance: DiscordSDK | null = null;
 
     async function initializeApp() {
-      // 1. Create a timeout to detect standalone browser vs Discord
+      // 1. Detect if code query parameter exists in standard browser URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const redirect_uri = encodeURIComponent(window.location.origin)
+      const urlCode = urlParams.get("code");
+
+      if (urlCode) {
+        try {
+          const tokenResponse = await fetch("/api/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: urlCode, redirect_uri }),
+          });
+
+          if (tokenResponse.ok) {
+            const tokenData = await tokenResponse.json();
+            if (tokenData.access_token) {
+              localStorage.setItem("givewars2_discord_token", tokenData.access_token);
+            }
+          }
+        } catch (tokenExchangeErr) {
+          console.error("Failed to exchange browser url code for token:", tokenExchangeErr);
+        } finally {
+          // Clean the code parameter from the URL to keep it clean and secure
+          const cleanUrl = window.location.pathname + window.location.hash;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+      }
+
+      // 2. If a browser OAuth token exists, verify and load profile info
+      const browserToken = localStorage.getItem("givewars2_discord_token");
+      if (browserToken) {
+        try {
+          const response = await fetch("/api/discord/me", {
+            headers: {
+              Authorization: `Bearer ${browserToken}`,
+            },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (isMounted) {
+              setContext({
+                isInDiscord: false,
+                user: data.user,
+                guild: data.guild,
+                loading: false,
+                error: null,
+                discordSdk: null,
+              });
+              return;
+            }
+          } else {
+            // Token is invalid or expired
+            localStorage.removeItem("givewars2_discord_token");
+          }
+        } catch (meError) {
+          console.error("Failed to fetch Discord profile with saved browser token:", meError);
+          localStorage.removeItem("givewars2_discord_token");
+        }
+      }
+
+      // 3. Fallback to Discord Embedded SDK initialization (only succeeds inside Discord client)
       const sdkPromise = (async () => {
         try {
           sdkInstance = new DiscordSDK(CLIENT_ID);
           await sdkInstance.ready();
           return sdkInstance;
-        } catch (e) {
+        } catch {
           throw new Error("Discord handshake failed or not in Discord environment.");
         }
       })();
@@ -83,7 +144,7 @@ export function useDiscord() {
           throw new Error("SDK instance is null");
         }
 
-        // 2. We are in Discord! Perform authentication
+        // We are in Discord! Perform authentication
         const { code } = await sdk.commands.authorize({
           client_id: CLIENT_ID,
           response_type: "code",
@@ -111,7 +172,7 @@ export function useDiscord() {
         if (!isMounted) return;
 
         // Fetch user information using authenticated SDK or via API
-        let discordUser: DiscordUser = {
+        const discordUser: DiscordUser = {
           id: auth.user.id,
           username: auth.user.username,
           globalName: auth.user.global_name || undefined,
@@ -125,7 +186,7 @@ export function useDiscord() {
         if (sdk.guildId) {
           discordGuild = {
             id: sdk.guildId,
-            name: "My Discord Guild", // Discord SDK does not always provide Guild Name directly client-side without extra API calls, but we store the ID.
+            name: "My Discord Guild",
           };
         }
 
@@ -139,24 +200,26 @@ export function useDiscord() {
         });
 
       } catch (err) {
-        // Fallback to STANDALONE BROWSER (MOCK MODE)
+        // Fallback to STANDALONE BROWSER (MOCK MODE in dev, login screen in prod)
         if (!isMounted) return;
 
-        console.log("Entering Standalone Mock Mode:", err instanceof Error ? err.message : String(err));
+        console.log("Entering Standalone Mode (Unauthenticated or Mock Fallback):", err instanceof Error ? err.message : String(err));
 
-        // Pick a random mock user or let the user override
-        const localMockUser = localStorage.getItem("gw2_mock_user");
-        let activeMockUser = localMockUser ? JSON.parse(localMockUser) : null;
+        let activeMockUser = null;
+        if (process.env.NODE_ENV === "development") {
+          const localMockUser = localStorage.getItem("gw2_mock_user");
+          activeMockUser = localMockUser ? JSON.parse(localMockUser) : null;
 
-        if (!activeMockUser) {
-          activeMockUser = MOCK_USERS[Math.floor(Math.random() * MOCK_USERS.length)];
-          localStorage.setItem("gw2_mock_user", JSON.stringify(activeMockUser));
+          if (!activeMockUser) {
+            activeMockUser = MOCK_USERS[Math.floor(Math.random() * MOCK_USERS.length)];
+            localStorage.setItem("gw2_mock_user", JSON.stringify(activeMockUser));
+          }
         }
 
         setContext({
           isInDiscord: false,
           user: activeMockUser,
-          guild: { id: "mock-guild-1", name: "Eternal Baguette [BAGU]" },
+          guild: activeMockUser ? { id: "mock-guild-1", name: "Eternal Baguette [BAGU]" } : null,
           loading: false,
           error: null,
           discordSdk: null,
@@ -179,9 +242,23 @@ export function useDiscord() {
     }));
   };
 
+  const logout = () => {
+    localStorage.removeItem("givewars2_discord_token");
+    localStorage.removeItem("gw2_mock_user");
+    setContext({
+      isInDiscord: false,
+      user: null,
+      guild: null,
+      loading: false,
+      error: null,
+      discordSdk: null,
+    });
+  };
+
   return {
     ...context,
     changeMockUser,
+    logout,
     mockUsers: MOCK_USERS,
   };
 }

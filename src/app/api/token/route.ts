@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
-    const { code } = await req.json();
+    const { code, redirect_uri } = await req.json();
 
     const clientSecret = process.env.DISCORD_CLIENT_SECRET;
     const clientId = process.env.DISCORD_CLIENT_ID;
@@ -14,6 +14,12 @@ export async function POST(req: Request) {
       clientSecret.includes("TODO_REPLACE_WITH") ||
       clientId.includes("TODO_REPLACE_WITH")
     ) {
+      if (process.env.NODE_ENV !== "development") {
+        return NextResponse.json(
+          { error: "Discord Activity credentials are misconfigured. Please check environment variables." },
+          { status: 500 }
+        );
+      }
       console.warn("WARNING: Using mock Discord OAuth exchange because credentials are not set in environment.");
       return NextResponse.json({
         access_token: "mock-access-token-development-only",
@@ -28,12 +34,12 @@ export async function POST(req: Request) {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
       },
       body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
         grant_type: "authorization_code",
-        code: code,
+        code,
+        redirect_uri: decodeURIComponent(redirect_uri),
       }),
     });
 

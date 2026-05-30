@@ -12,7 +12,20 @@ import ApiKeyModal from "@/components/ApiKeyModal";
 import { Dices, Shield, ShieldAlert, Sparkles, RefreshCw, Gift } from "lucide-react";
 
 export default function Home() {
-  const { isInDiscord, user, guild, loading, error, changeMockUser, mockUsers } = useDiscord();
+  const { isInDiscord, user, guild, loading, error, changeMockUser, mockUsers, logout } = useDiscord();
+
+  const handleDiscordLogin = () => {
+    if (typeof window === "undefined") return;
+    const clientId = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
+    if (!clientId) {
+      alert("Discord Client ID is missing. Please check your environment variables.");
+      return;
+    }
+    const redirectUri = encodeURIComponent(window.location.origin);
+    const scope = encodeURIComponent("identify guilds");
+    const discordAuthUrl = `https://discord.com/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}`;
+    window.location.href = discordAuthUrl;
+  };
   const {
     activeItem,
     rolls,
@@ -162,6 +175,80 @@ export default function Home() {
     );
   }
 
+  if (!user && !isInDiscord) {
+    return (
+      <div className="flex-center" style={{ minHeight: "100vh", backgroundColor: "var(--color-bg-dark)", color: "#fff", padding: "20px", textAlign: "center", flexDirection: "column", background: "radial-gradient(circle at center, #1e1015 0%, #0d0608 100%)" }}>
+        <div style={{
+          background: "rgba(255, 255, 255, 0.02)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          borderRadius: "16px",
+          padding: "40px",
+          maxWidth: "480px",
+          backdropFilter: "blur(12px)",
+          boxShadow: "0 20px 50px rgba(0, 0, 0, 0.4)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center"
+        }}>
+          <div style={{
+            background: "linear-gradient(135deg, var(--color-gold) 0%, var(--color-crimson) 100%)",
+            borderRadius: "50%",
+            width: "80px",
+            height: "80px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: "24px",
+            boxShadow: "0 0 30px rgba(244, 176, 36, 0.3)"
+          }}>
+            <span style={{ fontSize: "40px", animation: "wobble 2s ease-in-out infinite" }}>🎲</span>
+          </div>
+
+          <h1 style={{ fontFamily: "var(--font-header)", letterSpacing: "3px", fontSize: "28px", margin: "0 0 8px 0", color: "#fff" }}>
+            GIVEWARS2
+          </h1>
+          <div style={{ fontSize: "11px", background: "rgba(244, 176, 36, 0.15)", color: "var(--color-text-gold)", border: "1px solid var(--color-gold-glow)", padding: "2px 8px", borderRadius: "4px", textTransform: "uppercase", letterSpacing: "2px", marginBottom: "20px" }}>
+            Guild Giveaway Activity
+          </div>
+
+          <p style={{ color: "var(--color-text-primary)", fontSize: "14px", lineHeight: "1.6", marginBottom: "30px", margin: "0 0 30px 0" }}>
+            Welcome to the cooperative loot giveaway system! Connect your Discord account to join active roll lobbies, verify item ownership with your GW2 API key, and suggest loot.
+          </p>
+
+          <button
+            onClick={handleDiscordLogin}
+            style={{
+              padding: "12px 28px",
+              fontSize: "15px",
+              fontWeight: "600",
+              borderRadius: "8px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              width: "100%",
+              justifyContent: "center",
+              background: "linear-gradient(90deg, #5865F2 0%, #4752C4 100%)",
+              color: "#fff",
+              border: "none",
+              cursor: "pointer",
+              boxShadow: "0 4px 15px rgba(88, 101, 242, 0.3)",
+              transition: "transform 0.2s, box-shadow 0.2s"
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 127.14 96.36" fill="currentColor">
+              <path d="M107.7,8.07A105.15,105.15,0,0,0,77.26,0a77.19,77.19,0,0,0-3.3,6.83A96.67,96.67,0,0,0,53.22,6.83,77.19,77.19,0,0,0,49.88,0,105.15,105.15,0,0,0,19.44,8.07C3.66,31.58-1.86,54.65,1,77.53A105.73,105.73,0,0,0,32,96.36a77.7,77.7,0,0,0,6.63-10.85,68.43,68.43,0,0,1-10.5-5c.9-.65,1.76-1.34,2.58-2a75.59,75.59,0,0,0,72.78,0c.82.71,1.68,1.4,2.58,2a68.43,68.43,0,0,1-10.5,5,77.7,77.7,0,0,0,6.63,10.85,105.73,105.73,0,0,0,31-18.83C129.87,50.12,123.63,27.3,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53S36.18,40.36,42.45,40.36,53.83,46,53.83,53,48.72,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.24,60,73.24,53S78.41,40.36,84.69,40.36,96.07,46,96.07,53,91,65.69,84.69,65.69Z"/>
+            </svg>
+            Connect Discord Account
+          </button>
+
+          <div style={{ marginTop: "24px", fontSize: "11px", color: "var(--color-text-secondary)" }}>
+            Designed for Eternal Baguette [BAGU]
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container" style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
 
@@ -186,15 +273,42 @@ export default function Home() {
 
         {/* User profile state snippet */}
         {user && (
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "rgba(255, 255, 255, 0.03)", border: "var(--border-glass)", padding: "6px 14px", borderRadius: "20px" }}>
-            <div className="avatar-mock" style={{ width: "20px", height: "20px" }} />
-            <span style={{ fontSize: "13px", fontWeight: "600", color: "#fff" }}>{user.username}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "rgba(255, 255, 255, 0.03)", border: "var(--border-glass)", padding: "6px 14px", borderRadius: "20px" }}>
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt="Avatar" style={{ width: "20px", height: "20px", borderRadius: "50%", border: "1px solid rgba(255,255,255,0.2)" }} />
+              ) : (
+                <div className="avatar-mock" style={{ width: "20px", height: "20px" }} />
+              )}
+              <span style={{ fontSize: "13px", fontWeight: "600", color: "#fff" }}>
+                {user.globalName || user.username}
+              </span>
+            </div>
+
+            {!isInDiscord && (
+              <button
+                onClick={logout}
+                style={{
+                  background: "rgba(239, 68, 68, 0.15)",
+                  color: "#ef4444",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  padding: "6px 14px",
+                  borderRadius: "20px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  transition: "background 0.2s"
+                }}
+              >
+                Log Out
+              </button>
+            )}
           </div>
         )}
       </header>
 
       {/* Standalone Browser (Mock Mode) Developer Bar */}
-      {!isInDiscord && (
+      {!isInDiscord && process.env.NODE_ENV === "development" && (
         <div className="mock-banner">
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <span className="mock-badge">Mock Mode</span>

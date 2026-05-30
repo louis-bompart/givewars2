@@ -291,9 +291,10 @@ export function useGiveaway() {
     { id: "mock-r6", username: "JennahQueen.1111" }
   ];
 
-  // Periodically simulate a random mock player adding a cool suggestion to the queue when idle!
+  // Periodically simulate a random mock player adding a cool suggestion to the queue when idle (dev mode only)!
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (process.env.NODE_ENV !== "development") return;
 
     const interval = setInterval(() => {
       // 25% chance of suggestion every 25 seconds when idle (no active giveaway)
