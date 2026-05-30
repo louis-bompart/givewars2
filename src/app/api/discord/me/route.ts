@@ -38,8 +38,11 @@ export async function GET(req: Request) {
       avatarUrl,
     };
 
+    const ALLOWED_GUILD_ID = process.env.NEXT_PUBLIC_ALLOWED_GUILD_ID;
+
     // 2. Fetch User Guilds
     let guild = null;
+    let isMemberOfAllowedGuild = false;
     try {
       const guildsResponse = await fetch("https://discord.com/api/users/@me/guilds", {
         headers: {
@@ -49,33 +52,32 @@ export async function GET(req: Request) {
 
       if (guildsResponse.ok) {
         const guildsData = await guildsResponse.json();
-        if (Array.isArray(guildsData) && guildsData.length > 0) {
-          // Look for a guild containing "baguette" or use the first available guild
-          const baguetteGuild = guildsData.find(g => 
-            g.name.toLowerCase().includes("baguette") || 
-            g.name.toLowerCase().includes("eternal")
-          );
-          
-          const selected = baguetteGuild || guildsData[0];
-          guild = {
-            id: selected.id,
-            name: selected.name,
-            icon: selected.icon 
-              ? `https://cdn.discordapp.com/icons/${selected.id}/${selected.icon}.png`
-              : undefined
-          };
+        if (Array.isArray(guildsData)) {
+          const matchedGuild = guildsData.find(g => g.id === ALLOWED_GUILD_ID);
+          if (matchedGuild) {
+            isMemberOfAllowedGuild = true;
+            guild = {
+              id: matchedGuild.id,
+              name: matchedGuild.name,
+              icon: matchedGuild.icon
+                ? `https://cdn.discordapp.com/icons/${matchedGuild.id}/${matchedGuild.icon}.png`
+                : undefined
+            };
+          }
         }
       }
     } catch (gErr) {
       console.error("Failed to fetch guilds from Discord:", gErr);
     }
 
-    // Default fallback if no guild is mapped
-    if (!guild) {
-      guild = {
-        id: "browser-guild",
-        name: "Eternal Baguette [BAGU]",
-      };
+    if (!isMemberOfAllowedGuild) {
+      return NextResponse.json(
+        {
+          error: "forbidden_guild",
+          message: "Access Denied: You must be a member of the authorized Discord server to use this application."
+        },
+        { status: 403 }
+      );
     }
 
     return NextResponse.json({ user, guild });

@@ -111,7 +111,7 @@ export default function Home() {
       icon: nextItem.icon,
       description: nextItem.description
     });
-    
+
     // Broadcast active item to peers
     broadcastActiveItem(nextItem);
 
@@ -186,7 +186,7 @@ export default function Home() {
   const handleSaveApiKey = async (key: string): Promise<boolean | string> => {
     const trimmedKey = key.trim();
     setApiKey(trimmedKey);
-    
+
     if (typeof window !== "undefined") {
       if (trimmedKey) {
         localStorage.setItem("gw2_api_key", trimmedKey);
@@ -270,6 +270,99 @@ export default function Home() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex-center" style={{ minHeight: "100vh", backgroundColor: "var(--color-bg-dark)", color: "#fff", padding: "20px", textAlign: "center", flexDirection: "column", background: "radial-gradient(circle at center, #1e0909 0%, #0d0404 100%)" }}>
+        <style dangerouslySetInnerHTML={{
+          __html: `
+          @keyframes pulse-crimson {
+            0%, 100% {
+              transform: scale(1);
+              filter: drop-shadow(0 0 5px rgba(168, 43, 43, 0.4));
+            }
+            50% {
+              transform: scale(1.05);
+              filter: drop-shadow(0 0 15px rgba(168, 43, 43, 0.8));
+            }
+          }
+        `}} />
+        <div className="gw-card" style={{
+          padding: "40px",
+          maxWidth: "500px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          boxShadow: "0 20px 50px rgba(0, 0, 0, 0.5), var(--shadow-crimson)",
+          borderColor: "rgba(168, 43, 43, 0.3)"
+        }}>
+          {/* Header strip with glow */}
+          <div style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "3px",
+            background: "linear-gradient(90deg, transparent, var(--color-crimson), transparent)"
+          }} />
+
+          {/* Shield Alert Icon with animation */}
+          <div style={{
+            background: "linear-gradient(135deg, rgba(168, 43, 43, 0.2) 0%, rgba(168, 43, 43, 0.05) 100%)",
+            border: "1px solid rgba(168, 43, 43, 0.4)",
+            borderRadius: "50%",
+            width: "80px",
+            height: "80px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: "24px",
+            boxShadow: "var(--shadow-crimson)",
+            position: "relative"
+          }}>
+            <ShieldAlert style={{ width: "40px", height: "40px", color: "#ffa4a4", animation: "pulse-crimson 2s infinite ease-in-out" }} />
+          </div>
+
+          <h1 style={{ fontFamily: "var(--font-header)", letterSpacing: "3px", fontSize: "28px", margin: "0 0 8px 0", color: "#fff", textShadow: "0 0 10px rgba(168, 43, 43, 0.5)" }}>
+            ACCESS DENIED
+          </h1>
+          <div style={{ fontSize: "11px", background: "rgba(168, 43, 43, 0.15)", color: "#ff9e9e", border: "1px solid rgba(168, 43, 43, 0.3)", padding: "2px 8px", borderRadius: "4px", textTransform: "uppercase", letterSpacing: "2px", marginBottom: "20px", fontWeight: "600" }}>
+            Guild Restricted
+          </div>
+
+          <p style={{ color: "var(--color-text-primary)", fontSize: "14px", lineHeight: "1.6", marginBottom: "20px", margin: "0 0 20px 0" }}>
+            {error}
+          </p>
+
+          <p style={{ color: "var(--color-text-secondary)", fontSize: "12px", lineHeight: "1.5", margin: "0 0 30px 0" }}>
+            This application is exclusively authorized for members of <strong>Eternal Baguette [BAGU]</strong> (Server ID: {process.env.NEXT_PUBLIC_ALLOWED_GUILD_ID}).
+            Please make sure you are logged in with the correct Discord account that has access to this server.
+          </p>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
+            <button
+              onClick={logout}
+              className="btn-epic btn-crimson"
+              style={{
+                width: "100%",
+                padding: "12px 28px",
+                fontSize: "14px",
+                fontWeight: "600",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                justifyContent: "center",
+                cursor: "pointer"
+              }}
+            >
+              <RefreshCw style={{ width: "16px", height: "16px" }} />
+              Log Out & Switch Account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!user && !isInDiscord) {
     return (
       <div className="flex-center" style={{ minHeight: "100vh", backgroundColor: "var(--color-bg-dark)", color: "#fff", padding: "20px", textAlign: "center", flexDirection: "column", background: "radial-gradient(circle at center, #1e1015 0%, #0d0608 100%)" }}>
@@ -331,7 +424,7 @@ export default function Home() {
             }}
           >
             <svg width="20" height="20" viewBox="0 0 127.14 96.36" fill="currentColor">
-              <path d="M107.7,8.07A105.15,105.15,0,0,0,77.26,0a77.19,77.19,0,0,0-3.3,6.83A96.67,96.67,0,0,0,53.22,6.83,77.19,77.19,0,0,0,49.88,0,105.15,105.15,0,0,0,19.44,8.07C3.66,31.58-1.86,54.65,1,77.53A105.73,105.73,0,0,0,32,96.36a77.7,77.7,0,0,0,6.63-10.85,68.43,68.43,0,0,1-10.5-5c.9-.65,1.76-1.34,2.58-2a75.59,75.59,0,0,0,72.78,0c.82.71,1.68,1.4,2.58,2a68.43,68.43,0,0,1-10.5,5,77.7,77.7,0,0,0,6.63,10.85,105.73,105.73,0,0,0,31-18.83C129.87,50.12,123.63,27.3,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53S36.18,40.36,42.45,40.36,53.83,46,53.83,53,48.72,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.24,60,73.24,53S78.41,40.36,84.69,40.36,96.07,46,96.07,53,91,65.69,84.69,65.69Z"/>
+              <path d="M107.7,8.07A105.15,105.15,0,0,0,77.26,0a77.19,77.19,0,0,0-3.3,6.83A96.67,96.67,0,0,0,53.22,6.83,77.19,77.19,0,0,0,49.88,0,105.15,105.15,0,0,0,19.44,8.07C3.66,31.58-1.86,54.65,1,77.53A105.73,105.73,0,0,0,32,96.36a77.7,77.7,0,0,0,6.63-10.85,68.43,68.43,0,0,1-10.5-5c.9-.65,1.76-1.34,2.58-2a75.59,75.59,0,0,0,72.78,0c.82.71,1.68,1.4,2.58,2a68.43,68.43,0,0,1-10.5,5,77.7,77.7,0,0,0,6.63,10.85,105.73,105.73,0,0,0,31-18.83C129.87,50.12,123.63,27.3,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53S36.18,40.36,42.45,40.36,53.83,46,53.83,53,48.72,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.24,60,73.24,53S78.41,40.36,84.69,40.36,96.07,46,96.07,53,91,65.69,84.69,65.69Z" />
             </svg>
             Connect Discord Account
           </button>

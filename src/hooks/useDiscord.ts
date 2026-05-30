@@ -112,8 +112,23 @@ export function useDiscord() {
               return;
             }
           } else {
-            // Token is invalid or expired
-            localStorage.removeItem("givewars2_discord_token");
+            // Token is invalid or expired OR access denied (403)
+            const errData = await response.json().catch(() => ({}));
+            if (response.status === 403 && errData.error === "forbidden_guild") {
+              if (isMounted) {
+                setContext({
+                  isInDiscord: false,
+                  user: null,
+                  guild: null,
+                  loading: false,
+                  error: errData.message || "Access Denied: Guild not authorized.",
+                  discordSdk: null,
+                });
+                return;
+              }
+            } else {
+              localStorage.removeItem("givewars2_discord_token");
+            }
           }
         } catch (meError) {
           console.error("Failed to fetch Discord profile with saved browser token:", meError);
@@ -183,11 +198,26 @@ export function useDiscord() {
 
         // Get guild info if running in a guild context
         let discordGuild: DiscordGuild | null = null;
+        const ALLOWED_GUILD_ID = process.env.NEXT_PUBLIC_ALLOWED_GUILD_ID;
+
         if (sdk.guildId) {
           discordGuild = {
             id: sdk.guildId,
             name: "My Discord Guild",
           };
+        }
+
+        // Validate guild ID if running inside Discord
+        if (!sdk.guildId || sdk.guildId !== ALLOWED_GUILD_ID) {
+          setContext({
+            isInDiscord: true,
+            user: discordUser,
+            guild: discordGuild,
+            loading: false,
+            error: `Access Denied: This activity is only authorized for the specified Discord server (Guild ID: ${ALLOWED_GUILD_ID}).`,
+            discordSdk: sdk,
+          });
+          return;
         }
 
         setContext({
@@ -205,6 +235,7 @@ export function useDiscord() {
 
         console.log("Entering Standalone Mode (Unauthenticated or Mock Fallback):", err instanceof Error ? err.message : String(err));
 
+        const ALLOWED_GUILD_ID = process.env.NEXT_PUBLIC_ALLOWED_GUILD_ID!;
         let activeMockUser = null;
         if (process.env.NODE_ENV === "development") {
           const localMockUser = localStorage.getItem("gw2_mock_user");
@@ -219,7 +250,7 @@ export function useDiscord() {
         setContext({
           isInDiscord: false,
           user: activeMockUser,
-          guild: activeMockUser ? { id: "mock-guild-1", name: "Eternal Baguette [BAGU]" } : null,
+          guild: activeMockUser ? { id: ALLOWED_GUILD_ID, name: "Eternal Baguette [BAGU]" } : null,
           loading: false,
           error: null,
           discordSdk: null,
