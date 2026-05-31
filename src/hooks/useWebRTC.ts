@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ProposedItem } from "./useGiveaway";
+import { usePageActivity } from "./usePageActivity";
 
 interface WebRTCProps {
   instanceId: string | null;
@@ -42,6 +43,19 @@ export function useWebRTC({
   useEffect(() => {
     connectedPeersRef.current = connectedPeers;
   }, [connectedPeers]);
+
+  const { isActive } = usePageActivity({ idleTimeoutMs: 180000 }); // 3 minute idle timeout
+  const isActiveRef = useRef(isActive);
+  const triggerPollRef = useRef<(() => void) | null>(null);
+
+  // Keep isActiveRef updated and trigger an instant poll when activity resumes
+  useEffect(() => {
+    isActiveRef.current = isActive;
+    if (isActive && triggerPollRef.current) {
+      console.log("[WebRTC] Activity resumed. Triggering instant lobby heartbeat.");
+      triggerPollRef.current();
+    }
+  }, [isActive]);
 
   const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
   const dataChannels = useRef<Record<string, RTCDataChannel>>({});
@@ -488,7 +502,9 @@ export function useWebRTC({
     };
 
     const tick = async () => {
-      await performLobbyHeartbeat();
+      if (isActiveRef.current) {
+        await performLobbyHeartbeat();
+      }
       if (!isMounted) return;
       // Self-tuning dynamic heartbeat: poll snappy every 3 seconds if alone (fallback sync),
       // and scale back to 8 seconds once WebRTC peers are connected.
@@ -496,11 +512,19 @@ export function useWebRTC({
       timerId = setTimeout(tick, delay);
     };
 
+    triggerPollRef.current = () => {
+      if (isMounted) {
+        clearTimeout(timerId);
+        tick();
+      }
+    };
+
     tick();
 
     return () => {
       isMounted = false;
       clearTimeout(timerId);
+      triggerPollRef.current = null;
       // Clean up all active connections when unmounting
       Object.keys(peerConnections.current).forEach((peerId) => cleanupPeer(peerId));
     };

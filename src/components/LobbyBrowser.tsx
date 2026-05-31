@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { DiscordUser, DiscordGuild } from "@/hooks/useDiscord";
+import { usePageActivity } from "@/hooks/usePageActivity";
 import { Compass, Users, RefreshCw, Link, Play, Sparkles } from "lucide-react";
 
 interface ActiveLobby {
@@ -27,6 +28,8 @@ export default function LobbyBrowser({ user, guild, onJoinLobby }: LobbyBrowserP
   const [manualError, setManualError] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const { isActive } = usePageActivity({ idleTimeoutMs: 120000 }); // 2 minute idle timeout
+
   const fetchActiveLobbies = async (showRefreshIndicator = false) => {
     if (!guild) return;
     if (showRefreshIndicator) setIsRefreshing(true);
@@ -44,13 +47,13 @@ export default function LobbyBrowser({ user, guild, onJoinLobby }: LobbyBrowserP
     }
   };
 
-  // Poll for active lobbies every 5 seconds
+  // Poll for active lobbies every 5 seconds when the page is active
   useEffect(() => {
-    if (!guild) return;
+    if (!guild || !isActive) return;
     fetchActiveLobbies();
     const interval = setInterval(() => fetchActiveLobbies(), 5000);
     return () => clearInterval(interval);
-  }, [guild]);
+  }, [guild, isActive]);
 
   const handleManualJoin = (e: React.FormEvent) => {
     e.preventDefault();
