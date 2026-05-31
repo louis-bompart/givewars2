@@ -24,17 +24,7 @@ interface DiceTrayProps {
 
 export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, winner }: DiceTrayProps) {
 
-  if (!activeItem) {
-    return (
-      <div className="gw-card flex-center" style={{ minHeight: "350px", textAlign: "center", justifyContent: "center" }}>
-        <Dices style={{ width: "64px", height: "64px", color: "var(--color-text-secondary)", marginBottom: "16px", opacity: 0.3 }} />
-        <h2 style={{ color: "var(--color-text-secondary)" }}>Dice Tray Offline</h2>
-        <p style={{ color: "var(--color-text-secondary)", maxWidth: "340px", fontSize: "14px", marginTop: "4px" }}>
-          The tray will open once an officer starts a giveaway roll!
-        </p>
-      </div>
-    );
-  }
+  // Dice tray will always render to display lobby participants and status.
 
   interface SessionParticipant {
     id: string;
@@ -200,7 +190,7 @@ export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, 
                 ) : slotState === "rolled-for-fun" ? (
                   `Rolled ${rollValue} (For Fun)`
                 ) : (
-                  "Thinking..."
+                  activeItem ? "Thinking..." : "Ready"
                 )}
               </span>
             </div>

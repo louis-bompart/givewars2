@@ -14,6 +14,7 @@ interface LootQueueProps {
   rollingUsers: Record<string, boolean>;
   activeUser: any;
   winner: ParticipantRoll | null;
+  hideSidebar?: boolean;
 }
 
 // Popular pre-seeded items for quick suggests
@@ -88,7 +89,8 @@ export default function LootQueue({
   rolls,
   rollingUsers,
   activeUser,
-  winner
+  winner,
+  hideSidebar = false
 }: LootQueueProps) {
   const [customId, setCustomId] = useState("");
   const [proposing, setProposing] = useState(false);
@@ -127,7 +129,7 @@ export default function LootQueue({
   };
 
   return (
-    <div className="grid-2">
+    <div className={hideSidebar ? "hud-scrollable" : "grid-2"} style={{ display: "flex", flexDirection: "column", height: hideSidebar ? "100%" : "auto" }}>
       
       {/* COLUMN 1: Suggestion Box & Lineup */}
       <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -308,17 +310,6 @@ export default function LootQueue({
           )}
         </div>
 
-      </div>
-
-      {/* COLUMN 2: Visual Multiplayer Dice Tray Sidebar */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-        <DiceTray
-          rolls={rolls}
-          rollingUsers={rollingUsers}
-          activeUser={activeUser}
-          activeItem={activeItem}
-          winner={winner}
-        />
       </div>
 
     </div>

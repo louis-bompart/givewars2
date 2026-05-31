@@ -12,7 +12,7 @@ import DiceTray from "@/components/DiceTray";
 import LootQueue from "@/components/LootQueue";
 import ApiKeyModal from "@/components/ApiKeyModal";
 import LobbyBrowser from "@/components/LobbyBrowser";
-import { Dices, Shield, ShieldAlert, Sparkles, RefreshCw, Gift, Share2, LogOut } from "lucide-react";
+import { Dices, Shield, ShieldAlert, Sparkles, RefreshCw, Gift, Share2, LogOut, X, Settings, PlusCircle, Search, Play, Trophy, Users, CheckCircle, AlertTriangle, Key, Ban, Lock, HelpCircle } from "lucide-react";
 
 export default function Home() {
   const { isInDiscord, user, guild, loading, error, changeMockUser, mockUsers, logout, discordSdk } = useDiscord();
@@ -51,6 +51,17 @@ export default function Home() {
 
   const [selectedLobbyId, setSelectedLobbyId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Custom API Key storage (persists locally in user's browser as a fast-load fallback)
+  const [apiKey, setApiKey] = React.useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("gw2_api_key") || "";
+    }
+    return "";
+  });
+
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [hasAutoOpened, setHasAutoOpened] = useState(false);
 
   // Sync lobbyId from URL query parameter or sessionStorage on mount
   React.useEffect(() => {
@@ -191,18 +202,130 @@ export default function Home() {
     broadcastEndGiveaway();
   };
 
-  const [activeTab, setActiveTab] = useState<"roll" | "queue" | "profile" | "organizer">("roll");
+  const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
+  const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
+  const [officerConsoleOpen, setOfficerConsoleOpen] = useState(false);
 
-  // Custom API Key storage (persists locally in user's browser as a fast-load fallback)
-  const [apiKey, setApiKey] = React.useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("gw2_api_key") || "";
+  // GW2 Item Scan states
+  const [hasItem, setHasItem] = useState<boolean>(false);
+  const [checkingOwnership, setCheckingOwnership] = useState<boolean>(false);
+  
+  // Local rolling displays
+  const [isLocalRolling, setIsLocalRolling] = useState(false);
+  const [localRollDisplay, setLocalRollDisplay] = useState<number | null>(null);
+
+  const userRoll = React.useMemo(() => {
+    if (!user || !rolls) return null;
+    return rolls.find(r => r.userId === user.id) || null;
+  }, [user, rolls]);
+
+  const hasAlreadyRolled = !!userRoll;
+  const currentRoll = userRoll ? userRoll.roll : null;
+
+  React.useEffect(() => {
+    if (userRoll) {
+      setLocalRollDisplay(userRoll.roll);
+    } else {
+      setLocalRollDisplay(null);
     }
-    return "";
-  });
+  }, [userRoll]);
 
-  const [showKeyModal, setShowKeyModal] = useState(false);
-  const [hasAutoOpened, setHasAutoOpened] = useState(false);
+  // Check Guild Wars 2 inventory ownership of the active item
+  React.useEffect(() => {
+    if (!activeItem || !apiKey) {
+      setHasItem(false);
+      return;
+    }
+
+    async function checkGW2Ownership() {
+      if (!activeItem) return;
+      setCheckingOwnership(true);
+      try {
+        const idStr = activeItem.id.toString();
+        let isOwned = false;
+
+        // Smart mock check for a special test item
+        if (idStr === "21000") {
+          isOwned = true;
+        } else {
+          // 1. Check Bank & Shared Inventory (requires inventories scope)
+          const [bankRes, invRes] = await Promise.all([
+            fetch(`https://api.guildwars2.com/v2/account/bank?access_token=${apiKey}`).catch(() => null),
+            fetch(`https://api.guildwars2.com/v2/account/inventory?access_token=${apiKey}`).catch(() => null),
+          ]);
+
+          if (bankRes && bankRes.ok) {
+            const bankItems = await bankRes.json();
+            if (Array.isArray(bankItems)) {
+              if (bankItems.some(item => item && item.id === activeItem.id)) {
+                isOwned = true;
+              }
+            }
+          }
+
+          if (!isOwned && invRes && invRes.ok) {
+            const invItems = await invRes.json();
+            if (Array.isArray(invItems)) {
+              if (invItems.some(item => item && item.id === activeItem.id)) {
+                isOwned = true;
+              }
+            }
+          }
+
+          // 2. Specialty unlock checks if not already found in bank/inventory
+          if (!isOwned) {
+            let endpoint = "";
+            if (activeItem.type === "Mini") {
+              endpoint = "minis";
+            } else if (activeItem.type === "Dye") {
+              endpoint = "dyes";
+            } else if (["Weapon", "Armor", "Back"].includes(activeItem.type)) {
+              endpoint = "skins";
+            }
+
+            if (endpoint) {
+              const res = await fetch(`https://api.guildwars2.com/v2/account/${endpoint}?access_token=${apiKey}`);
+              if (res.ok) {
+                const unlocks = await res.json();
+                if (Array.isArray(unlocks)) {
+                  isOwned = unlocks.includes(activeItem.id);
+                }
+              }
+            }
+            
+            // 3. Novelty check for Gizmos / Consumables (like Endless Tonics)
+            if (!isOwned && ["Gizmo", "Consumable"].includes(activeItem.type)) {
+              const noveltiesRes = await fetch("https://api.guildwars2.com/v2/novelties?ids=all").catch(() => null);
+              if (noveltiesRes && noveltiesRes.ok) {
+                const allNovelties = await noveltiesRes.json();
+                if (Array.isArray(allNovelties)) {
+                  const matchingNovelty = allNovelties.find((n: any) => n.unlock_item && n.unlock_item.includes(activeItem.id));
+                  if (matchingNovelty) {
+                    const accNoveltiesRes = await fetch(`https://api.guildwars2.com/v2/account/novelties?access_token=${apiKey}`).catch(() => null);
+                    if (accNoveltiesRes && accNoveltiesRes.ok) {
+                      const accNovelties = await accNoveltiesRes.json();
+                      if (Array.isArray(accNovelties) && accNovelties.includes(matchingNovelty.id)) {
+                        isOwned = true;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        setHasItem(isOwned);
+      } catch (err) {
+        console.error("Error checking item ownership:", err);
+      } finally {
+        setCheckingOwnership(false);
+      }
+    }
+
+    checkGW2Ownership();
+  }, [activeItem, apiKey]);
+
 
   // Load API Key from database when Discord user identity is resolved
   React.useEffect(() => {
@@ -315,6 +438,34 @@ export default function Home() {
     if (!user) return;
     submitRoll(user.id, user.username, rollValue, hasItem);
     broadcastRoll(user.username, rollValue, hasItem);
+  };
+
+  const handleRoll = () => {
+    if (isLocalRolling || hasAlreadyRolled || !activeItem) return;
+
+    setIsLocalRolling(true);
+
+    // Dynamic fake number changes during shake animation
+    let tickCount = 0;
+    const interval = setInterval(() => {
+      setLocalRollDisplay(Math.floor(Math.random() * 20) + 1);
+      tickCount++;
+      if (tickCount > 8) {
+        clearInterval(interval);
+      }
+    }, 90);
+
+    setTimeout(() => {
+      const finalRoll = Math.floor(Math.random() * 20) + 1;
+      setLocalRollDisplay(finalRoll);
+      setIsLocalRolling(false);
+      handleRollSubmitted(finalRoll, hasItem);
+    }, 800);
+  };
+
+  const handlePass = () => {
+    if (isLocalRolling || hasAlreadyRolled || !activeItem) return;
+    handleRollSubmitted(-1, false);
   };
 
   if (loading) {
@@ -495,22 +646,24 @@ export default function Home() {
   }
 
   return (
-    <div className="app-container" style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+    <div className="hud-viewport" style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      {/* Runic glowing top indicator */}
+      <div className="hud-grid-accent" />
 
       {/* Top Banner / Navigation Head */}
-      <header style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", padding: "20px 0", marginBottom: "20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <header className="hud-top-bar">
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div style={{ background: "linear-gradient(135deg, var(--color-gold) 0%, var(--color-crimson) 100%)", borderRadius: "8px", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "var(--shadow-gold)" }}>
-            <span style={{ fontSize: "24px", transform: "rotate(-10deg)" }}>🎲</span>
+          <div style={{ background: "linear-gradient(135deg, var(--color-gold) 0%, var(--color-crimson) 100%)", borderRadius: "8px", width: "36px", height: "36px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "var(--shadow-gold)" }}>
+            <span style={{ fontSize: "20px", transform: "rotate(-10deg)" }}>🎲</span>
           </div>
           <div>
-            <h1 style={{ margin: 0, fontSize: "24px", fontFamily: "var(--font-header)", color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
+            <h1 style={{ margin: 0, fontSize: "20px", fontFamily: "var(--font-header)", color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
               GiveWars2
-              <span style={{ fontSize: "11px", background: "rgba(244, 176, 36, 0.15)", color: "var(--color-text-gold)", border: "1px solid var(--color-gold-glow)", padding: "2px 6px", borderRadius: "4px", textTransform: "uppercase", letterSpacing: "1px", verticalAlign: "middle" }}>
-                Alpha
+              <span style={{ fontSize: "9px", background: "rgba(244, 176, 36, 0.15)", color: "var(--color-text-gold)", border: "1px solid var(--color-gold-glow)", padding: "1px 4px", borderRadius: "4px", textTransform: "uppercase", letterSpacing: "1px", verticalAlign: "middle" }}>
+                HUD Alpha
               </span>
             </h1>
-            <p style={{ margin: 0, fontSize: "12px", color: "var(--color-text-secondary)" }}>
+            <p style={{ margin: 0, fontSize: "11px", color: "var(--color-text-secondary)" }}>
               {guild ? `Active in ${guild.name}` : "Discord x GuildWars2 Give Away App"}
             </p>
           </div>
@@ -526,9 +679,9 @@ export default function Home() {
                   background: copied ? "rgba(16, 185, 129, 0.15)" : "rgba(244, 176, 36, 0.12)",
                   color: copied ? "#10b981" : "var(--color-text-gold)",
                   border: copied ? "1px solid rgba(16, 185, 129, 0.3)" : "var(--border-gold)",
-                  padding: "6px 14px",
+                  padding: "5px 12px",
                   borderRadius: "20px",
-                  fontSize: "12px",
+                  fontSize: "11px",
                   fontWeight: "600",
                   cursor: "pointer",
                   display: "flex",
@@ -537,8 +690,8 @@ export default function Home() {
                   transition: "all 0.2s"
                 }}
               >
-                <Share2 style={{ width: "12px", height: "12px" }} />
-                {copied ? "Link Copied!" : "Share Invite"}
+                <Share2 style={{ width: "11px", height: "11px" }} />
+                {copied ? "Copied!" : "Invite Link"}
               </button>
             )}
 
@@ -549,9 +702,9 @@ export default function Home() {
                   background: "rgba(239, 68, 68, 0.15)",
                   color: "#ef4444",
                   border: "1px solid rgba(239, 68, 68, 0.3)",
-                  padding: "6px 14px",
+                  padding: "5px 12px",
                   borderRadius: "20px",
-                  fontSize: "12px",
+                  fontSize: "11px",
                   fontWeight: "600",
                   cursor: "pointer",
                   display: "flex",
@@ -560,24 +713,38 @@ export default function Home() {
                   transition: "all 0.2s"
                 }}
               >
-                <LogOut style={{ width: "12px", height: "12px" }} />
-                Leave Lobby
+                <LogOut style={{ width: "11px", height: "11px" }} />
+                Leave
               </button>
             )}
 
             {connectedPeers.length > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.3)", padding: "6px 14px", borderRadius: "20px", fontSize: "12px", color: "#10b981", fontWeight: "600" }}>
-                <span className="pulse-indicator" style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#10b981", display: "inline-block" }}></span>
-                {connectedPeers.length} {connectedPeers.length === 1 ? "Peer" : "Peers"} Connected
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.3)", padding: "5px 12px", borderRadius: "20px", fontSize: "11px", color: "#10b981", fontWeight: "600" }}>
+                <span className="pulse-indicator" style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#10b981", display: "inline-block" }}></span>
+                {connectedPeers.length} {connectedPeers.length === 1 ? "Peer" : "Peers"} Online
               </div>
             )}
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "rgba(255, 255, 255, 0.03)", border: "var(--border-glass)", padding: "6px 14px", borderRadius: "20px" }}>
+
+            {/* API Key Connection badge */}
+            <button
+              onClick={() => setRightDrawerOpen(!rightDrawerOpen)}
+              className={`hud-api-status-tag ${apiKey ? "linked" : "unlinked"}`}
+              style={{ cursor: "pointer", border: "none" }}
+            >
+              <Key style={{ width: "10px", height: "10px", marginRight: "4px" }} />
+              {apiKey ? "API Active" : "Link Account"}
+            </button>
+
+            <div 
+              onClick={() => setRightDrawerOpen(true)}
+              style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(255, 255, 255, 0.03)", border: "var(--border-glass)", padding: "5px 12px", borderRadius: "20px", cursor: "pointer" }}
+            >
               {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt="Avatar" style={{ width: "20px", height: "20px", borderRadius: "50%", border: "1px solid rgba(255,255,255,0.2)" }} />
+                <img src={user.avatarUrl} alt="Avatar" style={{ width: "18px", height: "18px", borderRadius: "50%", border: "1px solid rgba(255,255,255,0.2)" }} />
               ) : (
-                <div className="avatar-mock" style={{ width: "20px", height: "20px" }} />
+                <div className="avatar-mock" style={{ width: "18px", height: "18px" }} />
               )}
-              <span style={{ fontSize: "13px", fontWeight: "600", color: "#fff" }}>
+              <span style={{ fontSize: "12px", fontWeight: "600", color: "#fff" }}>
                 {user.globalName || user.username}
               </span>
             </div>
@@ -589,9 +756,9 @@ export default function Home() {
                   background: "rgba(239, 68, 68, 0.15)",
                   color: "#ef4444",
                   border: "1px solid rgba(239, 68, 68, 0.3)",
-                  padding: "6px 14px",
+                  padding: "5px 12px",
                   borderRadius: "20px",
-                  fontSize: "12px",
+                  fontSize: "11px",
                   fontWeight: "600",
                   cursor: "pointer",
                   transition: "background 0.2s"
@@ -610,23 +777,23 @@ export default function Home() {
         <>
           {/* Standalone Browser (Mock Mode) Developer Bar */}
           {!isInDiscord && process.env.NODE_ENV === "development" && (
-            <div className="mock-banner">
+            <div className="mock-banner" style={{ margin: "10px 24px 0 24px", borderRadius: "var(--border-radius-md)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span className="mock-badge">Mock Mode</span>
-                <span style={{ fontSize: "13px", color: "var(--color-text-primary)" }}>
+                <span className="mock-badge" style={{ fontSize: "10px" }}>Mock Mode</span>
+                <span style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
                   Running outside Discord iframe. Simulated players are enabled for testing!
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Identity:</span>
+                <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Identity:</span>
                 <select
                   style={{
                     background: "rgba(0,0,0,0.6)",
                     color: "#fff",
                     border: "var(--border-gold)",
                     borderRadius: "4px",
-                    padding: "4px 8px",
-                    fontSize: "12px",
+                    padding: "3px 6px",
+                    fontSize: "11px",
                     fontFamily: "var(--font-body)"
                   }}
                   value={user ? JSON.stringify(user) : ""}
@@ -646,43 +813,18 @@ export default function Home() {
             </div>
           )}
 
-          {/* Main Tab Controller navigation */}
-          <nav className="tabs-nav">
-            <button
-              className={`tab-btn ${activeTab === "roll" ? "active" : ""}`}
-              onClick={() => setActiveTab("roll")}
-            >
-              <Dices style={{ width: "16px", height: "16px" }} />
-              Dice Roll
-            </button>
-            <button
-              className={`tab-btn ${activeTab === "queue" ? "active" : ""}`}
-              onClick={() => setActiveTab("queue")}
-            >
-              <Gift style={{ width: "16px", height: "16px" }} />
-              Loot Queue ({displayedQueue.length})
-            </button>
-            <button
-              className={`tab-btn ${activeTab === "profile" ? "active" : ""}`}
-              onClick={() => setActiveTab("profile")}
-            >
-              <Shield style={{ width: "16px", height: "16px" }} />
-              GW2 Account
-            </button>
-            <button
-              className={`tab-btn ${activeTab === "organizer" ? "active" : ""}`}
-              onClick={() => setActiveTab("organizer")}
-            >
-              <ShieldAlert style={{ width: "16px", height: "16px" }} />
-              Organizer
-            </button>
-          </nav>
-
-          {/* Main Responsive Layout Body */}
-          <main style={{ flexGrow: 1 }}>
-
-            {/* Loot Queue Tab */}
-            {activeTab === "queue" && (
+          {/* LEFT SLIDING DRAWER: Loot Queue */}
+          <div className={`hud-drawer left ${leftDrawerOpen ? "open" : ""}`}>
+            <div className="hud-drawer-header">
+              <h2 style={{ display: "flex", alignItems: "center", gap: "10px", margin: 0, fontSize: "18px" }}>
+                <Gift style={{ color: "var(--color-gold)", width: "20px", height: "20px" }} />
+                Loot Queue Lineup
+              </h2>
+              <button onClick={() => setLeftDrawerOpen(false)} className="hud-controller-btn" style={{ width: "32px", height: "32px" }}>
+                <X style={{ width: "16px", height: "16px" }} />
+              </button>
+            </div>
+            <div className="hud-drawer-content">
               <LootQueue
                 proposalQueue={displayedQueue}
                 proposeItem={proposeItem}
@@ -692,76 +834,242 @@ export default function Home() {
                 rollingUsers={rollingUsers}
                 activeUser={user}
                 winner={winner}
+                hideSidebar={true}
               />
-            )}
+            </div>
+          </div>
 
-            {/* Other Tabs */}
-            {activeTab !== "queue" && (
-              <div className="grid-2" style={{ gridTemplateColumns: activeTab === "roll" ? "1fr 1fr" : "1fr" }}>
+          {/* RIGHT SLIDING DRAWER: GW2 Account Profile */}
+          <div className={`hud-drawer right ${rightDrawerOpen ? "open" : ""}`}>
+            <div className="hud-drawer-header">
+              <h2 style={{ display: "flex", alignItems: "center", gap: "10px", margin: 0, fontSize: "18px" }}>
+                <Shield style={{ color: "var(--color-gold)", width: "20px", height: "20px" }} />
+                GW2 Account Setup
+              </h2>
+              <button onClick={() => setRightDrawerOpen(false)} className="hud-controller-btn" style={{ width: "32px", height: "32px" }}>
+                <X style={{ width: "16px", height: "16px" }} />
+              </button>
+            </div>
+            <div className="hud-drawer-content">
+              <GW2Profile apiKey={apiKey} setApiKey={handleSaveApiKey} onFlushData={handleFlushData} />
+            </div>
+          </div>
 
-                {/* COLUMN 1: Active Tab Render */}
-                <div style={{ display: activeTab === "roll" ? "block" : "none" }}>
-                  <DiceRoller
-                    activeItem={activeItem}
-                    user={user}
-                    apiKey={apiKey}
-                    onRollSubmitted={handleRollSubmitted}
-                    rolls={rolls}
-                    onOpenKeyModal={() => setShowKeyModal(true)}
-                  />
+          {/* CENTER STAGE: The Arena */}
+          <main className="hud-battle-arena">
+            
+            {/* Active Loot Podium */}
+            <div className={`hud-loot-podium ${activeItem ? "active" : "empty"}`}>
+              {activeItem ? (
+                <>
+                  <div className="hud-loot-glow" style={{ "--rarity-color": `var(--rarity-color)` } as React.CSSProperties} />
+                  
+                  <span style={{ fontSize: "11px", color: "var(--color-text-gold)", letterSpacing: "2px", fontWeight: "700", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>
+                    🔥 Item in Play 🔥
+                  </span>
+                  
+                  <div className={`gw2-item rarity-${activeItem.rarity || "Basic"}`} style={{ maxWidth: "480px", margin: "0 auto", padding: "16px 20px", border: "2px solid var(--rarity-color)" }}>
+                    <div className="gw2-item-icon-container" style={{ width: "54px", height: "54px", border: "1px solid var(--rarity-color)" }}>
+                      <img src={activeItem.icon} alt={activeItem.name} className="gw2-item-icon" />
+                    </div>
+                    <div className="gw2-item-details" style={{ textAlign: "left" }}>
+                      <span className="gw2-item-name" style={{ fontSize: "18px" }}>{activeItem.name}</span>
+                      <span className="gw2-item-type" style={{ fontSize: "13px" }}>{activeItem.rarity} {activeItem.type}</span>
+                      {activeItem.description && (
+                        <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "4px", fontStyle: "italic", lineHeight: "1.4" }}>
+                          "{activeItem.description}"
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding: "10px" }}>
+                  <Dices style={{ width: "48px", height: "48px", color: "var(--color-text-secondary)", marginBottom: "12px", opacity: 0.3 }} />
+                  <h2 style={{ color: "var(--color-text-secondary)", fontSize: "18px", margin: 0 }}>Lobby Standby</h2>
+                  <p style={{ color: "var(--color-text-secondary)", maxWidth: "360px", fontSize: "13px", margin: "6px auto 0 auto", lineHeight: "1.5" }}>
+                    Ready to wage for epic loot! Suggestions can be proposed and launched using the **Loot Queue Drawer** on the bottom-left!
+                  </p>
                 </div>
+              )}
+            </div>
 
-                {activeTab === "profile" && (
-                  <GW2Profile apiKey={apiKey} setApiKey={handleSaveApiKey} onFlushData={handleFlushData} />
+            {/* Multiplayer Dice Tray Grid */}
+            <div className="hud-dice-tray-stage">
+              <DiceTray
+                rolls={rolls}
+                rollingUsers={rollingUsers}
+                activeUser={user}
+                activeItem={activeItem}
+                winner={winner}
+              />
+            </div>
+
+          </main>
+
+          {/* FLOATING COLLAPSIBLE OFFICER DOCK */}
+          {officerConsoleOpen && (
+            <div className="hud-officer-console">
+              <div className="hud-console-header">
+                <h3 style={{ margin: 0, fontSize: "14px", color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <ShieldAlert style={{ color: "var(--color-gold)", width: "16px", height: "16px" }} />
+                  Officer Administrative Console
+                </h3>
+                <button onClick={() => setOfficerConsoleOpen(false)} className="hud-controller-btn" style={{ width: "24px", height: "24px" }}>
+                  <X style={{ width: "12px", height: "12px" }} />
+                </button>
+              </div>
+              <div className="hud-console-content">
+                <OrganizerPanel
+                  activeItem={activeItem}
+                  startGiveaway={handleStartGiveaway}
+                  endGiveaway={handleEndGiveaway}
+                  simulateMockDecision={simulateMockDecision}
+                  autoSimulateLobby={autoSimulateLobby}
+                  proposalQueue={displayedQueue}
+                  rolls={rolls}
+                  winner={winner}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* BOTTOM CONTROLLER PANEL BAR */}
+          <footer className="hud-bottom-bar">
+            
+            {/* Bottom Left Buttons: Drawer Triggers */}
+            <div className="hud-bottom-left">
+              <button 
+                onClick={() => {
+                  setLeftDrawerOpen(!leftDrawerOpen);
+                  setRightDrawerOpen(false);
+                }}
+                className={`hud-controller-btn ${leftDrawerOpen ? "active" : ""}`}
+                title="Loot Queue"
+              >
+                <Gift style={{ width: "20px", height: "20px" }} />
+                {displayedQueue.length > 0 && (
+                  <span className="hud-btn-badge">{displayedQueue.length}</span>
                 )}
+              </button>
+              
+              <button 
+                onClick={() => {
+                  setRightDrawerOpen(!rightDrawerOpen);
+                  setLeftDrawerOpen(false);
+                }}
+                className={`hud-controller-btn ${rightDrawerOpen ? "active" : ""}`}
+                title="GW2 API Settings"
+              >
+                <Settings style={{ width: "20px", height: "20px" }} />
+              </button>
+            </div>
 
-                {activeTab === "organizer" && (
-                  <OrganizerPanel
-                    activeItem={activeItem}
-                    startGiveaway={handleStartGiveaway}
-                    endGiveaway={handleEndGiveaway}
-                    simulateMockDecision={simulateMockDecision}
-                    autoSimulateLobby={autoSimulateLobby}
-                    proposalQueue={displayedQueue}
-                    rolls={rolls}
-                    winner={winner}
-                  />
-                )}
+            {/* Bottom Center Button: Massive D20 Roll Trigger */}
+            <div className="hud-bottom-center">
+              
+              {isLocalRolling ? (
+                <button className="hud-mega-d20-button rolling-anim" disabled>
+                  <span>🎲</span>
+                </button>
+              ) : hasAlreadyRolled ? (
+                <button className="hud-mega-d20-button" style={{ 
+                  background: currentRoll === -1 ? "radial-gradient(circle, #291212 0%, #150909 100%)" : "radial-gradient(circle, #102e17 0%, #08170c 100%)",
+                  borderColor: currentRoll === -1 ? "#ef4444" : "#4ade80",
+                  color: currentRoll === -1 ? "#fca5a5" : "#bbf7d0",
+                  boxShadow: "none"
+                }} disabled>
+                  <span style={{ fontSize: "10px", opacity: 0.6 }}>Submitted</span>
+                  <span style={{ fontSize: "20px", fontWeight: "900" }}>
+                    {currentRoll === -1 ? "Pass" : currentRoll === 0 ? "Inelg" : currentRoll}
+                  </span>
+                </button>
+              ) : (
+                <button 
+                  onClick={handleRoll} 
+                  disabled={!activeItem}
+                  className="hud-mega-d20-button"
+                  style={{
+                    animation: activeItem ? "hud-float 3s ease-in-out infinite" : "none"
+                  }}
+                  title={activeItem ? (hasItem ? "Roll for Fun (Already Owned)" : "Roll D20!") : "No Active Giveaway"}
+                >
+                  <span style={{ fontSize: "10px", opacity: 0.6 }}>{hasItem ? "For Fun" : "PLAY"}</span>
+                  <span style={{ fontSize: "16px", fontWeight: "900" }}>ROLL</span>
+                </button>
+              )}
 
-                {/* COLUMN 2: Sidebar (Shows Dice Tray on Roll tab) */}
-                {activeTab === "roll" && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-                    <DiceTray
-                      rolls={rolls}
-                      rollingUsers={rollingUsers}
-                      activeUser={user}
-                      activeItem={activeItem}
-                      winner={winner}
-                    />
+              {/* Eligibility Scan HUD Status */}
+              <div className="hud-eligibility-dock">
+                {activeItem ? (
+                  !apiKey ? (
+                    <div 
+                      onClick={() => setRightDrawerOpen(true)} 
+                      className="hud-eligibility-badge no" 
+                      style={{ cursor: "pointer" }}
+                    >
+                      <AlertTriangle style={{ width: "12px", height: "12px" }} />
+                      <span>API Missing - Scan Offline</span>
+                    </div>
+                  ) : checkingOwnership ? (
+                    <div className="hud-eligibility-badge pending">
+                      <RefreshCw style={{ width: "12px", height: "12px", animation: "spin 1.5s linear infinite" }} />
+                      <span>Scanning Unlocks...</span>
+                    </div>
+                  ) : hasItem ? (
+                    <div className="hud-eligibility-badge no" title="You own this item. Rolling is for fun only.">
+                      <Lock style={{ width: "12px", height: "12px" }} />
+                      <span>Rolled For Fun (Unlocked)</span>
+                    </div>
+                  ) : (
+                    <div className="hud-eligibility-badge yes" title="You don't own this item and are fully eligible to win.">
+                      <CheckCircle style={{ width: "12px", height: "12px" }} />
+                      <span>Eligible to Win!</span>
+                    </div>
+                  )
+                ) : (
+                  <div className="hud-eligibility-badge pending">
+                    <HelpCircle style={{ width: "12px", height: "12px" }} />
+                    <span>Lobby Standby</span>
                   </div>
                 )}
-
               </div>
-            )}
-          </main>
+
+            </div>
+
+            {/* Bottom Right Buttons: Officer Actions */}
+            <div className="hud-bottom-right">
+              {/* Easy Pass/Skip option alongside the Mega Roll */}
+              {activeItem && !hasAlreadyRolled && (
+                <button
+                  onClick={handlePass}
+                  disabled={isLocalRolling}
+                  className="btn-epic btn-crimson"
+                  style={{ padding: "8px 16px", fontSize: "12px", letterSpacing: "1px", borderRadius: "16px" }}
+                >
+                  <Ban style={{ width: "12px", height: "12px", marginRight: "4px" }} />
+                  Pass Roll
+                </button>
+              )}
+
+              <button 
+                onClick={() => setOfficerConsoleOpen(!officerConsoleOpen)}
+                className={`hud-controller-btn ${officerConsoleOpen ? "active" : ""}`}
+                title="Officer Console"
+                style={{
+                  border: "1px solid rgba(168, 43, 43, 0.4)",
+                  color: "#ffa4a4"
+                }}
+              >
+                <ShieldAlert style={{ width: "20px", height: "20px" }} />
+              </button>
+            </div>
+
+          </footer>
         </>
       )}
 
-      {/* Footer */}
-      <footer className="footer">
-        <div style={{ display: "flex", justifyContent: "center", gap: "20px", marginBottom: "8px" }}>
-          <span>GiveWars2 v0.1.0-alpha</span>
-          <span>•</span>
-          <span>{guild ? `Active in ${guild.name}` : "Cooperative Guild Activity"}</span>
-          <span>•</span>
-          <a href="https://api.guildwars2.com" target="_blank" rel="noreferrer" style={{ color: "var(--color-gold)" }}>GW2 API Enabled</a>
-        </div>
-        <div>
-          This application is not affiliated with ArenaNet, Guild Wars 2, or NCSOFT. All GW2 assets belong to their respective creators.
-        </div>
-      </footer>
-
-      {/* API Key Instructions & Connect Modal */}
+      {/* API Key Connect Modal fallback */}
       <ApiKeyModal
         isOpen={showKeyModal}
         onClose={() => setShowKeyModal(false)}
