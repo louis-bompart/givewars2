@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { useDiscord } from "@/hooks/useDiscord";
 import { useGiveaway } from "@/hooks/useGiveaway";
 import { useWebRTC } from "@/hooks/useWebRTC";
@@ -734,6 +735,16 @@ export default function Home() {
               <Key style={{ width: "10px", height: "10px", marginRight: "4px" }} />
               {apiKey ? "API Active" : "Link Account"}
             </button>
+
+            {/* Loot Helper Navigation Link */}
+            <Link
+              href="/loot-checker"
+              className="hud-api-status-tag linked"
+              style={{ cursor: "pointer", textDecoration: "none", display: "flex", alignItems: "center" }}
+            >
+              <Search style={{ width: "10px", height: "10px", marginRight: "4px" }} />
+              Loot Helper
+            </Link>
 
             <div 
               onClick={() => setRightDrawerOpen(true)}
