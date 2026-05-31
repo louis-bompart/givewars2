@@ -168,7 +168,8 @@ export async function POST(req: Request) {
         if (isDiscordActivity !== undefined) {
           mockLobbies[instanceId].isDiscordActivity = isDiscordActivity;
         }
-        if (history) {
+        const existingHistory = mockLobbies[instanceId].history || [];
+        if (history && history.length > existingHistory.length) {
           mockLobbies[instanceId].history = history;
         }
 
@@ -237,6 +238,9 @@ export async function POST(req: Request) {
     const db = client.db("givewars2");
     const collection = db.collection("lobby_sessions");
 
+    const existingDoc = await collection.findOne({ instanceId });
+    const existingHistory = existingDoc?.history || [];
+
     // 1. Ensure document exists and update user heartbeat + add new signals
     const updateQuery: any = {
       $set: { updatedAt: new Date(now) },
@@ -258,7 +262,7 @@ export async function POST(req: Request) {
       updateQuery.$set.activeItemOwner = userId;
     }
 
-    if (history) {
+    if (history && history.length > existingHistory.length) {
       updateQuery.$set.history = history;
     }
 

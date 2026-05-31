@@ -137,6 +137,7 @@ export default function Home() {
     localQueue: proposalQueue,
     activeItem,
     rolls,
+    winnerHistory,
     onQueueUpdate: (peerUserId, queue) => {
       setPeerQueues((prev) => {
         const next = { ...prev };

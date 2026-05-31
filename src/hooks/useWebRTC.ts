@@ -14,6 +14,7 @@ interface WebRTCProps {
   localQueue: ProposedItem[];
   activeItem: any;
   rolls: any[];
+  winnerHistory: any[];
   onQueueUpdate: (peerUserId: string, queue: ProposedItem[]) => void;
   onRoll: (peerUserId: string, username: string, roll: number, hasItem: boolean) => void;
   onActiveItem: (item: any) => void;
@@ -32,6 +33,7 @@ export function useWebRTC({
   localQueue,
   activeItem,
   rolls,
+  winnerHistory,
   onQueueUpdate,
   onRoll,
   onActiveItem,
@@ -83,6 +85,11 @@ export function useWebRTC({
     rollsRef.current = rolls;
     localRollRef.current = rolls.find((r) => r.userId === userId) || null;
   }, [rolls, userId]);
+
+  const winnerHistoryRef = useRef<any[]>(winnerHistory);
+  useEffect(() => {
+    winnerHistoryRef.current = winnerHistory;
+  }, [winnerHistory]);
 
   // STUN Servers for ICE gathering (free public Google STUN servers)
   const rtcConfig: RTCConfiguration = {
@@ -357,6 +364,7 @@ export function useWebRTC({
             roll: localRollRef.current?.roll,
             hasItem: localRollRef.current?.hasItem,
             activeItem: activeItemRef.current,
+            history: winnerHistoryRef.current,
           }),
         });
 
@@ -392,7 +400,9 @@ export function useWebRTC({
 
         // Sync history
         if (dbHistory !== undefined && dbHistory !== null && onHistoryUpdate) {
-          onHistoryUpdate(dbHistory);
+          if (dbHistory.length >= winnerHistoryRef.current.length) {
+            onHistoryUpdate(dbHistory);
+          }
         }
 
         // 2. Process active peer list and handle WebRTC removals
