@@ -19,6 +19,7 @@ interface WebRTCProps {
   onActiveItem: (item: any) => void;
   onEndGiveaway: () => void;
   onConsumeProposal: (proposalId: string) => void;
+  onHistoryUpdate?: (history: any[]) => void;
 }
 
 export function useWebRTC({
@@ -36,8 +37,10 @@ export function useWebRTC({
   onActiveItem,
   onEndGiveaway,
   onConsumeProposal,
+  onHistoryUpdate,
 }: WebRTCProps) {
   const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
+  const [lobbyParticipants, setLobbyParticipants] = useState<any[]>([]);
   const connectedPeersRef = useRef<string[]>(connectedPeers);
   
   useEffect(() => {
@@ -359,10 +362,11 @@ export function useWebRTC({
 
         if (!response.ok || !isMounted) return;
 
-        const { participants, signals, activeItem: dbActiveItem } = await response.json();
+        const { participants, signals, activeItem: dbActiveItem, history: dbHistory } = await response.json();
 
         // 1. Database Fallback Sync (Snappy sync if WebRTC fails/guest mode)
         if (participants) {
+          setLobbyParticipants(participants);
           participants.forEach((peer: any) => {
             if (peer.userId !== userId) {
               // Sync peer's suggestion queue
@@ -384,6 +388,11 @@ export function useWebRTC({
           } else if (!dbActiveItem && activeItemRef.current) {
             onEndGiveaway();
           }
+        }
+
+        // Sync history
+        if (dbHistory !== undefined && dbHistory !== null && onHistoryUpdate) {
+          onHistoryUpdate(dbHistory);
         }
 
         // 2. Process active peer list and handle WebRTC removals
@@ -537,6 +546,7 @@ export function useWebRTC({
 
   return {
     connectedPeers,
+    lobbyParticipants,
     broadcastRoll,
     broadcastActiveItem,
     broadcastEndGiveaway,

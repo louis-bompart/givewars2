@@ -29,6 +29,7 @@ interface LobbySession {
   isDiscordActivity?: boolean;
   activeItem?: any;
   activeItemOwner?: string | null;
+  history?: any[];
 }
 
 // In-memory mock database fallback for local dev when MongoDB is not connected
@@ -113,6 +114,7 @@ export async function POST(req: Request) {
       roll,
       hasItem,
       activeItem,
+      history,
     } = await req.json();
 
     if (!instanceId || !userId || !username) {
@@ -156,6 +158,7 @@ export async function POST(req: Request) {
           isDiscordActivity,
           activeItem: activeItem || null,
           activeItemOwner: activeItem ? userId : null,
+          history: history || [],
         };
       } else {
         // Update metadata
@@ -164,6 +167,9 @@ export async function POST(req: Request) {
         if (guildName) mockLobbies[instanceId].guildName = guildName;
         if (isDiscordActivity !== undefined) {
           mockLobbies[instanceId].isDiscordActivity = isDiscordActivity;
+        }
+        if (history) {
+          mockLobbies[instanceId].history = history;
         }
 
         // Hybrid Active Giveaway state syncing
@@ -221,6 +227,7 @@ export async function POST(req: Request) {
         signals: userSignals,
         activeItem: lobby.activeItem || null,
         activeItemOwner: lobby.activeItemOwner || null,
+        history: lobby.history || [],
         mocked: true,
       });
     }
@@ -249,6 +256,10 @@ export async function POST(req: Request) {
     if (activeItem) {
       updateQuery.$set.activeItem = activeItem;
       updateQuery.$set.activeItemOwner = userId;
+    }
+
+    if (history) {
+      updateQuery.$set.history = history;
     }
 
     await collection.updateOne(
@@ -312,7 +323,7 @@ export async function POST(req: Request) {
     const doc = await collection.findOne({ instanceId });
 
     if (!doc) {
-      return NextResponse.json({ participants: [], signals: [] });
+      return NextResponse.json({ participants: [], signals: [], history: [] });
     }
 
     const participants: Participant[] = doc.participants || [];
@@ -338,6 +349,7 @@ export async function POST(req: Request) {
       signals: userSignals,
       activeItem: doc.activeItem || null,
       activeItemOwner: doc.activeItemOwner || null,
+      history: doc.history || [],
     });
   } catch (error) {
     console.error("Lobby API POST endpoint error:", error);

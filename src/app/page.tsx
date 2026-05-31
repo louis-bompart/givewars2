@@ -35,6 +35,9 @@ export default function Home() {
     rolls,
     rollingUsers,
     proposalQueue,
+    winnerHistory,
+    setWinnerHistory,
+    settleRound: settleRoundRaw,
     proposeItem,
     launchNextProposedItem,
     startGiveaway,
@@ -119,6 +122,7 @@ export default function Home() {
 
   const {
     connectedPeers,
+    lobbyParticipants,
     broadcastRoll,
     broadcastActiveItem,
     broadcastEndGiveaway,
@@ -156,6 +160,9 @@ export default function Home() {
     },
     onConsumeProposal: (proposalId) => {
       removeProposedItem(proposalId);
+    },
+    onHistoryUpdate: (history) => {
+      setWinnerHistory(history);
     },
   });
 
@@ -201,6 +208,66 @@ export default function Home() {
   const handleEndGiveaway = () => {
     endGiveaway();
     broadcastEndGiveaway();
+  };
+
+  // Everyone Has Played check:
+  // If activeItem is set, we identify all players in the lobby (ourself + standard mock players + server-synced lobbyParticipants).
+  // Each of them must have submitted a roll decision (which means their userId is in the rolls array with a non-null roll).
+  const everyoneHasPlayed = React.useMemo(() => {
+    if (!activeItem || rolls.length === 0) return false;
+
+    // Build the set of active players we expect to roll
+    const activeIds = new Set<string>();
+    
+    // 1. Add current user
+    if (user) {
+      activeIds.add(user.id);
+    }
+    
+    // 2. Add real lobby participants from server heartbeat
+    if (lobbyParticipants && lobbyParticipants.length > 0) {
+      lobbyParticipants.forEach(peer => {
+        activeIds.add(peer.userId);
+      });
+    }
+
+    // 3. Fallback: Add mock simulation rollers in development if lobby has no other online peers
+    if (process.env.NODE_ENV === "development" && (!lobbyParticipants || lobbyParticipants.length <= 1)) {
+      const LOBBY_MOCK_IDS = ["mock-r1", "mock-r2", "mock-r3", "mock-r4", "mock-r5", "mock-r6"];
+      LOBBY_MOCK_IDS.forEach(id => {
+        if (!user || user.id !== id) {
+          activeIds.add(id);
+        }
+      });
+    }
+
+    // Check if every single active player ID has rolled (is in the `rolls` array with a roll value)
+    for (const id of activeIds) {
+      const hasRolled = rolls.some(r => r.userId === id);
+      if (!hasRolled) return false;
+    }
+
+    return true;
+  }, [activeItem, rolls, user, lobbyParticipants]);
+
+  // Host detection: First participant in the lobby list is the server-side organizer, or fallback to current user.
+  const isHost = React.useMemo(() => {
+    if (!lobbyParticipants || lobbyParticipants.length === 0) return true;
+    return lobbyParticipants[0].userId === user?.id;
+  }, [lobbyParticipants, user]);
+
+  // Automated Queue Progression Handler:
+  // Settle the active round, and if this player is the organizer, automatically launch the next item in queue!
+  const handleSettleRound = (roundWinner: any, item: any) => {
+    if (!item) return;
+    settleRoundRaw(roundWinner, item);
+
+    if (isHost && displayedQueue.length > 0) {
+      // 1-second transition delay gives players a visual moment to see the concluded state
+      setTimeout(() => {
+        handleLaunchNext();
+      }, 1000);
+    }
   };
 
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
@@ -895,13 +962,11 @@ export default function Home() {
                   </div>
                 </>
               ) : (
-                <div style={{ padding: "10px" }}>
-                  <Dices style={{ width: "48px", height: "48px", color: "var(--color-text-secondary)", marginBottom: "12px", opacity: 0.3 }} />
-                  <h2 style={{ color: "var(--color-text-secondary)", fontSize: "18px", margin: 0 }}>Lobby Standby</h2>
-                  <p style={{ color: "var(--color-text-secondary)", maxWidth: "360px", fontSize: "13px", margin: "6px auto 0 auto", lineHeight: "1.5" }}>
-                    Ready to wage for epic loot! Suggestions can be proposed and launched using the **Loot Queue Drawer** on the bottom-left!
-                  </p>
-                </div>
+                <GuildChronicles 
+                  winnerHistory={winnerHistory} 
+                  lobbyParticipants={lobbyParticipants} 
+                  user={user} 
+                />
               )}
             </div>
 
@@ -913,6 +978,7 @@ export default function Home() {
                 activeUser={user}
                 activeItem={activeItem}
                 winner={winner}
+                lobbyParticipants={lobbyParticipants}
               />
             </div>
 
@@ -935,6 +1001,7 @@ export default function Home() {
                   activeItem={activeItem}
                   startGiveaway={handleStartGiveaway}
                   endGiveaway={handleEndGiveaway}
+                  settleRound={handleSettleRound}
                   simulateMockDecision={simulateMockDecision}
                   autoSimulateLobby={autoSimulateLobby}
                   proposalQueue={displayedQueue}
@@ -1080,6 +1147,17 @@ export default function Home() {
         </>
       )}
 
+      {/* Celebration Winner overlay */}
+      {everyoneHasPlayed && activeItem && (
+        <CelebrationOverlay
+          winner={winner}
+          activeItem={activeItem}
+          settleRound={handleSettleRound}
+          isHost={isHost}
+          onEndGiveaway={handleEndGiveaway}
+        />
+      )}
+
       {/* API Key Connect Modal fallback */}
       <ApiKeyModal
         isOpen={showKeyModal}
@@ -1087,6 +1165,449 @@ export default function Home() {
         onSave={handleSaveApiKey}
         initialKey={apiKey}
       />
+    </div>
+  );
+}
+
+// ==========================================
+// DYNAMIC WINNER CELEBRATION COMPONENTS
+// ==========================================
+
+interface CelebrationConfettiProps {
+  rarity: string;
+}
+
+function CelebrationConfetti({ rarity }: CelebrationConfettiProps) {
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animationFrameId: number;
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = window.innerHeight);
+
+    const handleResize = () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    };
+    window.addEventListener("resize", handleResize);
+
+    // Color palette based on rarity
+    let colorHSLRange = [40, 50]; // default gold/yellow
+    if (rarity === "Legendary") colorHSLRange = [30, 45]; // orange/gold
+    else if (rarity === "Ascended") colorHSLRange = [320, 340]; // magenta/pink
+    else if (rarity === "Exotic") colorHSLRange = [0, 15]; // red/orange
+    else if (rarity === "Rare") colorHSLRange = [50, 65]; // yellow
+
+    interface Particle {
+      x: number;
+      y: number;
+      radius: number;
+      color: string;
+      vx: number;
+      vy: number;
+      rotation: number;
+      rotationSpeed: number;
+      width: number;
+      height: number;
+    }
+
+    const particles: Particle[] = [];
+    const particleCount = 125;
+
+    for (let i = 0; i < particleCount; i++) {
+      const radius = Math.random() * 4 + 2;
+      const hue = Math.floor(Math.random() * (colorHSLRange[1] - colorHSLRange[0]) + colorHSLRange[0]);
+      const saturation = Math.floor(Math.random() * 30 + 70);
+      const lightness = Math.floor(Math.random() * 20 + 50);
+
+      particles.push({
+        x: Math.random() * width,
+        y: Math.random() * -height - 20,
+        radius,
+        color: `hsl(${hue}, ${saturation}%, ${lightness}%)`,
+        vx: Math.random() * 4 - 2,
+        vy: Math.random() * 3 + 2.5,
+        rotation: Math.random() * 360,
+        rotationSpeed: Math.random() * 4 - 2,
+        width: Math.random() * 8 + 4,
+        height: Math.random() * 12 + 6,
+      });
+    }
+
+    const draw = () => {
+      ctx.clearRect(0, 0, width, height);
+
+      particles.forEach((p) => {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate((p.rotation * Math.PI) / 180);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.width / 2, -p.height / 2, p.width, p.height);
+        ctx.restore();
+
+        // Update physics
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rotation += p.rotationSpeed;
+
+        // Reset particle if it goes off bottom
+        if (p.y > height) {
+          p.y = Math.random() * -50 - 20;
+          p.x = Math.random() * width;
+          p.vy = Math.random() * 3 + 2.5;
+        }
+        if (p.x > width) p.x = 0;
+        else if (p.x < 0) p.x = width;
+      });
+
+      animationFrameId = requestAnimationFrame(draw);
+    };
+
+    draw();
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [rarity]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        pointerEvents: "none",
+        zIndex: 9999,
+      }}
+    />
+  );
+}
+
+interface CelebrationOverlayProps {
+  winner: any;
+  activeItem: any;
+  settleRound: (winner: any, item: any) => void;
+  isHost: boolean;
+  onEndGiveaway: () => void;
+}
+
+function CelebrationOverlay({ winner, activeItem, settleRound, isHost, onEndGiveaway }: CelebrationOverlayProps) {
+  return (
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100vw",
+      height: "100vh",
+      backgroundColor: "rgba(13, 6, 8, 0.9)",
+      backdropFilter: "blur(10px)",
+      zIndex: 9990,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "20px",
+      animation: "fade-in 0.5s ease-out forwards"
+    }}>
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes scale-up {
+          from { transform: scale(0.9); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+        @keyframes pulse-gold {
+          0%, 100% { box-shadow: 0 0 15px rgba(244, 176, 36, 0.2), inset 0 0 15px rgba(244, 176, 36, 0.1); }
+          50% { box-shadow: 0 0 30px rgba(244, 176, 36, 0.6), inset 0 0 25px rgba(244, 176, 36, 0.3); }
+        }
+      `}} />
+      <CelebrationConfetti rarity={activeItem.rarity || "Basic"} />
+      
+      <div className="gw-card" style={{
+        maxWidth: "600px",
+        width: "100%",
+        textAlign: "center",
+        padding: "40px",
+        borderRadius: "16px",
+        border: "2px solid var(--color-gold)",
+        boxShadow: "0 0 50px rgba(0, 0, 0, 0.8)",
+        animation: "scale-up 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, pulse-gold 3s infinite ease-in-out",
+        position: "relative",
+        background: "radial-gradient(circle at center, #1b1014 0%, #0c0507 100%)"
+      }}>
+        {/* Runic glowing top header border */}
+        <div style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "4px",
+          background: "linear-gradient(90deg, transparent, var(--color-gold), transparent)"
+        }} />
+
+        <div style={{
+          background: "linear-gradient(135deg, var(--color-gold) 0%, #d4af37 100%)",
+          borderRadius: "50%",
+          width: "80px",
+          height: "80px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          margin: "0 auto 24px auto",
+          boxShadow: "0 0 25px rgba(244, 176, 36, 0.4)"
+        }}>
+          <Trophy style={{ width: "40px", height: "40px", color: "#000" }} />
+        </div>
+
+        <h1 style={{
+          fontFamily: "var(--font-header)",
+          letterSpacing: "4px",
+          fontSize: "32px",
+          color: "var(--color-text-gold)",
+          margin: "0 0 8px 0",
+          textTransform: "uppercase",
+          textShadow: "0 0 10px rgba(244, 176, 36, 0.5)"
+        }}>
+          Giveaway Concluded!
+        </h1>
+        <p style={{ color: "var(--color-text-secondary)", fontSize: "14px", margin: "0 0 30px 0" }}>
+          Every player in the lobby has submitted their decision.
+        </p>
+
+        {winner ? (
+          <div style={{
+            background: "rgba(255, 255, 255, 0.02)",
+            border: "1px solid rgba(244, 176, 36, 0.2)",
+            borderRadius: "12px",
+            padding: "24px",
+            marginBottom: "30px",
+            boxShadow: "inset 0 0 20px rgba(0,0,0,0.5)"
+          }}>
+            <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", letterSpacing: "1.5px", textTransform: "uppercase", display: "block", marginBottom: "12px" }}>
+              🏆 Supreme Roll Winner 🏆
+            </span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "12px", marginBottom: "16px" }}>
+              <div style={{
+                background: "linear-gradient(135deg, var(--color-gold) 0%, var(--color-crimson) 100%)",
+                width: "42px",
+                height: "42px",
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: "bold",
+                color: "#fff",
+                fontSize: "18px",
+                boxShadow: "0 0 15px rgba(244, 176, 36, 0.3)"
+              }}>
+                {winner.username[0].toUpperCase()}
+              </div>
+              <div style={{ textAlign: "left" }}>
+                <div style={{ fontSize: "20px", fontWeight: "800", color: "#fff" }}>
+                  {winner.username.split(".")[0]}
+                </div>
+                <div style={{ fontSize: "12px", color: "#4ade80" }}>
+                  Winning Roll: <strong style={{ fontSize: "14px" }}>{winner.roll}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              background: "rgba(0,0,0,0.4)",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              border: `1px solid var(--rarity-color, rgba(255,255,255,0.06))`,
+              textAlign: "left"
+            }} className={`gw2-item rarity-${activeItem.rarity || "Basic"}`}>
+              <img src={activeItem.icon} alt={activeItem.name} style={{ width: "36px", height: "36px", borderRadius: "4px", border: "1px solid var(--rarity-color)" }} />
+              <div>
+                <div style={{ fontWeight: "700", color: "#fff", fontSize: "14px" }}>{activeItem.name}</div>
+                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{activeItem.rarity} {activeItem.type}</div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            background: "rgba(239, 68, 68, 0.05)",
+            border: "1px solid rgba(239, 68, 68, 0.2)",
+            borderRadius: "12px",
+            padding: "24px",
+            marginBottom: "30px",
+            color: "#fca5a5"
+          }}>
+            <Ban style={{ width: "32px", height: "32px", color: "#ef4444", margin: "0 auto 12px auto" }} />
+            <div style={{ fontWeight: "700", fontSize: "16px", marginBottom: "4px" }}>No Eligible Winners</div>
+            <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0 }}>
+              All participants passed, were ineligible, or already owned the item.
+            </p>
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+          {isHost ? (
+            <>
+              <button
+                className="btn-epic btn-gold"
+                onClick={() => settleRound(winner, activeItem)}
+                style={{
+                  padding: "12px 30px",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  border: "1px solid var(--color-gold)",
+                  background: "linear-gradient(90deg, var(--color-gold) 0%, #d4af37 100%)",
+                  color: "#000",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px"
+                }}
+              >
+                <Trophy style={{ width: "16px", height: "16px" }} />
+                Settle Round & Archive
+              </button>
+              <button
+                className="btn-epic btn-crimson"
+                onClick={onEndGiveaway}
+                style={{ padding: "12px 20px", fontSize: "14px" }}
+              >
+                Abort
+              </button>
+            </>
+          ) : (
+            <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", fontStyle: "italic", border: "1px dashed rgba(255,255,255,0.1)", padding: "10px 20px", borderRadius: "8px", width: "100%" }}>
+              ⏳ Waiting for the giveaway host to settle the round...
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface GuildChroniclesProps {
+  winnerHistory: any[];
+  lobbyParticipants: any[];
+  user: any;
+}
+
+function GuildChronicles({ winnerHistory, lobbyParticipants, user }: GuildChroniclesProps) {
+  const formatTimeAgo = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return "just now";
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ago`;
+  };
+
+  return (
+    <div style={{ padding: "10px 0", width: "100%", maxWidth: "750px", margin: "0 auto" }}>
+      <div style={{ display: "flex", gap: "20px", flexDirection: "column" }}>
+        
+        {/* Chronicles Table Card */}
+        <div className="gw-card" style={{ padding: "24px", textAlign: "left", background: "rgba(10, 5, 7, 0.6)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px dashed rgba(244,176,36,0.15)", paddingBottom: "12px" }}>
+            <div>
+              <h2 style={{ fontSize: "18px", margin: 0, color: "#fff", display: "flex", alignItems: "center", gap: "8px", fontFamily: "var(--font-header)", letterSpacing: "1px" }}>
+                <span style={{ color: "var(--color-gold)" }}>📜</span> Guild Chronicles
+              </h2>
+              <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+                Chronicles of valorous loot awarded during active lobbies
+              </span>
+            </div>
+            <div style={{ background: "rgba(244, 176, 36, 0.1)", border: "1px solid rgba(244,176,36,0.3)", padding: "3px 10px", borderRadius: "12px", fontSize: "11px", color: "var(--color-text-gold)" }}>
+              {winnerHistory.length} Recorded Wins
+            </div>
+          </div>
+
+          {winnerHistory.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "30px 10px", color: "var(--color-text-secondary)" }}>
+              <Dices style={{ width: "36px", height: "36px", opacity: 0.25, margin: "0 auto 12px auto" }} />
+              <div style={{ fontWeight: "600", color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>Standby: No Chronicles Recorded Yet</div>
+              <p style={{ fontSize: "12px", margin: "4px 0 0 0", color: "var(--color-text-secondary)", lineHeight: "1.4" }}>
+                Ready to wage! Launch an item from the **Loot Queue Drawer** (bottom-left) to initiate a roll event and record history.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "250px", overflowY: "auto", paddingRight: "4px" }}>
+              {winnerHistory.map((round, idx) => {
+                const cleanWinnerName = round.winnerUsername.split(".")[0];
+                return (
+                  <div 
+                    key={idx}
+                    className={`gw2-item rarity-${round.itemRarity || "Basic"}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 16px",
+                      background: "rgba(0, 0, 0, 0.3)",
+                      border: "1px solid rgba(255,255,255,0.03)",
+                      borderLeft: `3px solid var(--rarity-color)`
+                    }}
+                  >
+                    {/* Item and Icon */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <img src={round.itemIcon} alt={round.itemName} style={{ width: "28px", height: "28px", borderRadius: "4px", border: "1px solid var(--rarity-color)" }} />
+                      <div>
+                        <div style={{ fontWeight: "700", color: "#fff", fontSize: "13px" }}>{round.itemName}</div>
+                        <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{round.itemRarity}</div>
+                      </div>
+                    </div>
+
+                    {/* Winner Badge and Roll */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div style={{
+                          background: "linear-gradient(135deg, #424656 0%, #202229 100%)",
+                          width: "22px",
+                          height: "22px",
+                          borderRadius: "50%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "10px",
+                          fontWeight: "bold",
+                          color: "#fff"
+                        }}>
+                          {cleanWinnerName[0]?.toUpperCase() || "?"}
+                        </div>
+                        <span style={{ fontSize: "12px", color: "#fff", fontWeight: "600" }}>{cleanWinnerName}</span>
+                      </div>
+                      
+                      <div style={{ textAlign: "right" }}>
+                        <span style={{
+                          fontSize: "12px",
+                          color: round.winningRoll > 0 ? "var(--color-text-gold)" : "var(--color-text-secondary)",
+                          fontWeight: "700",
+                          display: "block"
+                        }}>
+                          {round.winningRoll > 0 ? `👑 Rolled ${round.winningRoll}` : "Passed/Inelg"}
+                        </span>
+                        <span style={{ fontSize: "9px", color: "var(--color-text-secondary)" }}>{formatTimeAgo(round.timestamp)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+      </div>
     </div>
   );
 }

@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { ShieldAlert, Play, Trash2, Users, Search, PlusCircle, Gift } from "lucide-react";
+import { ShieldAlert, Play, Trash2, Users, Search, PlusCircle, Gift, Trophy } from "lucide-react";
 import { GiveawayItem, ParticipantRoll, ProposedItem } from "@/hooks/useGiveaway";
 
 interface OrganizerPanelProps {
   activeItem: GiveawayItem | null;
   startGiveaway: (item: GiveawayItem) => void;
   endGiveaway: () => void;
+  settleRound?: (winner: ParticipantRoll | null, item: GiveawayItem) => void;
   simulateMockDecision: (mockUser: { id: string; username: string }, isForcedOwned?: boolean) => void;
   autoSimulateLobby: (mockRollers: { id: string; username: string }[]) => void;
   proposalQueue?: ProposedItem[];
@@ -88,6 +89,7 @@ export default function OrganizerPanel({
   activeItem,
   startGiveaway,
   endGiveaway,
+  settleRound,
   simulateMockDecision,
   autoSimulateLobby,
   proposalQueue = [],
@@ -315,13 +317,34 @@ export default function OrganizerPanel({
 
           {/* Action Row */}
           <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
+            {settleRound && (
+              <button
+                className="btn-epic btn-gold"
+                onClick={() => settleRound(winner, activeItem)}
+                style={{
+                  flexGrow: 1,
+                  padding: "14px",
+                  border: "1px solid var(--color-gold)",
+                  background: "rgba(244, 176, 36, 0.12)",
+                  color: "var(--color-text-gold)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px"
+                }}
+                title="Settle round immediately with current rolls"
+              >
+                <Trophy style={{ width: "16px", height: "16px" }} />
+                Force Settle
+              </button>
+            )}
             <button
               className="btn-epic btn-crimson"
               onClick={endGiveaway}
-              style={{ width: "100%", padding: "14px" }}
+              style={{ flexGrow: 1, padding: "14px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
             >
-              <Trash2 style={{ width: "18px", height: "18px", marginRight: "8px" }} />
-              End Giveaway (Clear State)
+              <Trash2 style={{ width: "16px", height: "16px" }} />
+              Abort Giveaway
             </button>
           </div>
 

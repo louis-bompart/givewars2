@@ -29,12 +29,25 @@ const STORAGE_KEYS = {
   ITEM: "givewars2_active_item",
   ROLLS: "givewars2_rolls",
   QUEUE: "givewars2_proposal_queue",
+  HISTORY: "givewars2_winner_history",
 };
+
+export interface SettledRound {
+  itemId: number;
+  itemName: string;
+  itemIcon: string;
+  itemRarity: string;
+  winnerUsername: string;
+  winnerUserId: string;
+  winningRoll: number;
+  timestamp: number;
+}
 
 export function useGiveaway() {
   const [activeItem, setActiveItem] = useState<GiveawayItem | null>(null);
   const [rolls, setRolls] = useState<ParticipantRoll[]>([]);
   const [proposalQueue, setProposalQueue] = useState<ProposedItem[]>([]);
+  const [winnerHistory, setWinnerHistory] = useState<SettledRound[]>([]);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -44,6 +57,7 @@ export function useGiveaway() {
       const storedItem = localStorage.getItem(STORAGE_KEYS.ITEM);
       const storedRolls = localStorage.getItem(STORAGE_KEYS.ROLLS);
       const storedQueue = localStorage.getItem(STORAGE_KEYS.QUEUE);
+      const storedHistory = localStorage.getItem(STORAGE_KEYS.HISTORY);
 
       if (storedItem) {
         setActiveItem(JSON.parse(storedItem));
@@ -53,6 +67,9 @@ export function useGiveaway() {
       }
       if (storedQueue) {
         setProposalQueue(JSON.parse(storedQueue));
+      }
+      if (storedHistory) {
+        setWinnerHistory(JSON.parse(storedHistory));
       }
     } catch (e) {
       console.error("Error loading giveaway state from localStorage:", e);
@@ -85,6 +102,13 @@ export function useGiveaway() {
           console.error("Error parsing storage queue update:", err);
         }
       }
+      if (e.key === STORAGE_KEYS.HISTORY && e.newValue) {
+        try {
+          setWinnerHistory(JSON.parse(e.newValue));
+        } catch (err) {
+          console.error("Error parsing storage history update:", err);
+        }
+      }
     };
 
     window.addEventListener("storage", handleStorageChange);
@@ -104,7 +128,7 @@ export function useGiveaway() {
   };
 
   // Helper to persist state
-  const saveState = (item: GiveawayItem | null, newRolls: ParticipantRoll[]) => {
+  const saveState = (item: GiveawayItem | null, newRolls: ParticipantRoll[], newHistory?: SettledRound[]) => {
     if (typeof window === "undefined") return;
 
     try {
@@ -114,6 +138,9 @@ export function useGiveaway() {
         localStorage.removeItem(STORAGE_KEYS.ITEM);
       }
       localStorage.setItem(STORAGE_KEYS.ROLLS, JSON.stringify(newRolls));
+      if (newHistory) {
+        localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(newHistory));
+      }
     } catch (e) {
       console.error("Error saving giveaway state to localStorage:", e);
     }
@@ -332,16 +359,42 @@ export function useGiveaway() {
     return eligibleRolls.length > 0 ? eligibleRolls[0] : null;
   };
 
+  const settleRound = (winner: ParticipantRoll | null, item: GiveawayItem) => {
+    const newSettledRound: SettledRound = {
+      itemId: item.id,
+      itemName: item.name,
+      itemIcon: item.icon,
+      itemRarity: item.rarity,
+      winnerUsername: winner ? winner.username : "No eligible winner",
+      winnerUserId: winner ? winner.userId : "none",
+      winningRoll: winner ? winner.roll : 0,
+      timestamp: Date.now(),
+    };
+
+    setWinnerHistory(prev => {
+      const next = [newSettledRound, ...prev];
+      if (typeof window !== "undefined") {
+        localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(next));
+      }
+      return next;
+    });
+
+    endGiveaway();
+  };
+
   return {
     activeItem,
     rolls,
     rollingUsers,
     proposalQueue,
+    winnerHistory,
+    setWinnerHistory,
     proposeItem,
     launchNextProposedItem,
     startGiveaway,
     submitRoll,
     endGiveaway,
+    settleRound,
     simulateMockRoll,
     simulateMockDecision,
     autoSimulateLobby,

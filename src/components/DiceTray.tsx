@@ -20,9 +20,10 @@ interface DiceTrayProps {
   activeUser: any;
   activeItem: any;
   winner: ParticipantRoll | null;
+  lobbyParticipants?: any[];
 }
 
-export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, winner }: DiceTrayProps) {
+export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, winner, lobbyParticipants = [] }: DiceTrayProps) {
 
   // Dice tray will always render to display lobby participants and status.
 
@@ -46,21 +47,40 @@ export default function DiceTray({ rolls, rollingUsers, activeUser, activeItem, 
     });
   }
 
-  // 2. Add standard simulated guild members (excluding current user to avoid duplicates)
-  if (process.env.NODE_ENV === "development") {
-    LOBBY_PLAYERS.forEach(player => {
-      if (!activeUser || activeUser.id !== player.id) {
+  // 2. Add real lobby participants fetched from server heartbeat first
+  if (lobbyParticipants && lobbyParticipants.length > 0) {
+    lobbyParticipants.forEach(peer => {
+      if (!activeUser || activeUser.id !== peer.userId) {
+        const cleanName = peer.username.split(".")[0];
         sessionParticipants.push({
-          id: player.id,
-          username: player.username,
-          globalName: player.globalName,
+          id: peer.userId,
+          username: peer.username,
+          globalName: cleanName,
           isActivePlayer: false
         });
       }
     });
   }
 
-  // 3. Add any other players who have rolled (e.g. previous mock identities that rolled)
+  // 3. Fallback: Add standard simulated guild members in development if lobby is otherwise empty
+  if (process.env.NODE_ENV === "development" && (!lobbyParticipants || lobbyParticipants.length <= 1)) {
+    LOBBY_PLAYERS.forEach(player => {
+      if (!activeUser || activeUser.id !== player.id) {
+        // Only add if not already added by rolls or other means
+        const alreadyAdded = sessionParticipants.some(p => p.id === player.id);
+        if (!alreadyAdded) {
+          sessionParticipants.push({
+            id: player.id,
+            username: player.username,
+            globalName: player.globalName,
+            isActivePlayer: false
+          });
+        }
+      }
+    });
+  }
+
+  // 4. Add any other players who have rolled (e.g. previous mock identities that rolled)
   rolls.forEach(roll => {
     const alreadyAdded = sessionParticipants.some(p => p.id === roll.userId);
     if (!alreadyAdded) {
