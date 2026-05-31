@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
-import { Sparkles, PlusCircle, Search, Gift, Users, ChevronRight, Play } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import { Sparkles, PlusCircle, Search, Gift, Users, ChevronRight, Play, Key, CheckCircle2, RefreshCw } from "lucide-react";
 import { ProposedItem, ParticipantRoll } from "@/hooks/useGiveaway";
 import DiceTray from "./DiceTray";
 
@@ -16,16 +17,6 @@ interface LootQueueProps {
   winner: ParticipantRoll | null;
   hideSidebar?: boolean;
 }
-
-// Popular pre-seeded items for quick suggests
-const QUICK_SUGGEST_ITEMS = [
-  { id: 30698, name: "Eternity", rarity: "Legendary", type: "Weapon" },
-  { id: 19675, name: "Gift of Mastery", rarity: "Legendary", type: "Crafting" },
-  { id: 85244, name: "Endless Choya Piñata Tonic", rarity: "Exotic", type: "Gizmo" },
-  { id: 20323, name: "Mini Red Panda", rarity: "Exotic", type: "Mini" },
-  { id: 70051, name: "Black Lion Chest Key", rarity: "Rare", type: "Key" },
-  { id: 89115, name: "Coalescence", rarity: "Legendary", type: "Ring" }
-];
 
 // Helper to base64-decode a Guild Wars 2 Chat Code (e.g. [&AgDqdwaA]) to extract the 3-byte little-endian Item ID
 function parseGW2ChatLink(chatLink: string): number | null {
@@ -97,6 +88,96 @@ export default function LootQueue({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [suggestionState, setSuggestionState] = useState<"loading" | "unlinked" | "no-matches" | "loaded">("loading");
+
+  useEffect(() => {
+    if (!activeUser?.id) {
+      setSuggestionState("unlinked");
+      return;
+    }
+
+    let isMounted = true;
+
+    const fetchSuggestions = async () => {
+      setLoadingSuggestions(true);
+      setSuggestionState("loading");
+      try {
+        const res = await fetch("/api/gw2/check-loot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: activeUser.id }),
+        });
+
+        if (!isMounted) return;
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.items) && data.items.length > 0) {
+            setSuggestions(data.items);
+            setSuggestionState("loaded");
+          } else {
+            setSuggestions([]);
+            setSuggestionState("no-matches");
+          }
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          if (res.status === 400 || errData.error?.toLowerCase().includes("link")) {
+            setSuggestionState("unlinked");
+          } else {
+            setSuggestionState("no-matches");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load dynamic suggestions:", err);
+        if (isMounted) {
+          setSuggestionState("no-matches");
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingSuggestions(false);
+        }
+      }
+    };
+
+    fetchSuggestions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeUser]);
+
+  const handleRefreshSuggestions = async () => {
+    if (!activeUser?.id) return;
+    setLoadingSuggestions(true);
+    setSuggestionState("loading");
+    try {
+      const res = await fetch("/api/gw2/check-loot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: activeUser.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success && Array.isArray(data.items) && data.items.length > 0) {
+        setSuggestions(data.items);
+        setSuggestionState("loaded");
+      } else {
+        if (res.status === 400 || data.error?.toLowerCase().includes("link")) {
+          setSuggestionState("unlinked");
+        } else {
+          setSuggestions([]);
+          setSuggestionState("no-matches");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to refresh suggestions:", err);
+      setSuggestionState("no-matches");
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
   const triggerPropose = async (itemId: number) => {
     if (!activeUser) return;
     setProposing(true);
@@ -158,31 +239,190 @@ export default function LootQueue({
             </div>
           )}
 
-          {/* Quick suggestions lineup tags */}
+          {/* Grounded Suggestions */}
           <div>
-            <h3 style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "10px", letterSpacing: "0.5px" }}>
-              Quick Suggestions Curated Loot
-            </h3>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-              {QUICK_SUGGEST_ITEMS.map((item) => (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <h3 style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--color-text-secondary)", margin: 0, letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
+                <Sparkles style={{ width: "13px", height: "13px", color: "var(--color-gold)" }} />
+                Grounded Suggestions
+              </h3>
+              {suggestionState === "loaded" && (
                 <button
-                  key={item.id}
-                  onClick={() => triggerPropose(item.id)}
-                  disabled={proposing}
-                  className="tab-btn"
+                  onClick={handleRefreshSuggestions}
+                  disabled={loadingSuggestions}
                   style={{
-                    fontSize: "12px",
-                    padding: "6px 12px",
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid rgba(255,255,255,0.07)",
-                    borderRadius: "20px"
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--color-text-secondary)",
+                    cursor: "pointer",
+                    padding: "2px",
+                    display: "flex",
+                    alignItems: "center",
+                    transition: "color 0.2s"
+                  }}
+                  title="Scan Inventories Again"
+                  onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
+                  onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-text-secondary)"}
+                >
+                  <RefreshCw style={{ width: "12px", height: "12px", animation: loadingSuggestions ? "spin 1.5s linear infinite" : "none" }} />
+                </button>
+              )}
+            </div>
+
+            {/* UNLINKED STATE */}
+            {suggestionState === "unlinked" && (
+              <div style={{
+                background: "linear-gradient(135deg, rgba(var(--color-gold-raw), 0.08) 0%, rgba(0,0,0,0.4) 100%)",
+                border: "var(--border-gold)",
+                borderRadius: "12px",
+                padding: "20px 16px",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "10px",
+                boxShadow: "var(--shadow-gold)"
+              }}>
+                <Key style={{ width: "24px", height: "24px", color: "var(--color-text-gold)", filter: "drop-shadow(0 0 5px rgba(var(--color-gold-raw), 0.45))" }} />
+                <div style={{ fontSize: "13px", fontWeight: "700", color: "#fff" }}>
+                  Vault Suggestions Locked
+                </div>
+                <p style={{ fontSize: "11px", color: "var(--color-text-secondary)", margin: 0, lineHeight: "1.4" }}>
+                  Link your GW2 API key with <strong style={{ color: "#fff" }}>inventories</strong> scopes to ground suggestions on items you own that other guild mates are missing!
+                </p>
+                <Link
+                  href="/loot-checker"
+                  className="btn-epic"
+                  style={{
+                    fontSize: "10px",
+                    padding: "6px 14px",
+                    borderRadius: "20px",
+                    marginTop: "4px",
+                    textDecoration: "none",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px"
                   }}
                 >
-                  <PlusCircle style={{ width: "12px", height: "12px", color: "var(--color-gold)", marginRight: "4px" }} />
-                  {item.name} ({item.rarity})
-                </button>
-              ))}
-            </div>
+                  <Search style={{ width: "11px", height: "11px" }} />
+                  Link Key & Scan
+                </Link>
+              </div>
+            )}
+
+            {/* LOADING STATE */}
+            {suggestionState === "loading" && (
+              <div style={{
+                background: "rgba(255, 255, 255, 0.02)",
+                border: "var(--border-glass)",
+                borderRadius: "8px",
+                padding: "18px",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "8px"
+              }}>
+                <RefreshCw style={{ width: "16px", height: "16px", color: "var(--color-gold)", animation: "spin 2s linear infinite" }} />
+                <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+                  Scanning vaults for missing guild collections...
+                </span>
+              </div>
+            )}
+
+            {/* NO MATCHES STATE */}
+            {suggestionState === "no-matches" && (
+              <div style={{
+                background: "rgba(16, 185, 129, 0.04)",
+                border: "1px solid rgba(16, 185, 129, 0.2)",
+                borderRadius: "12px",
+                padding: "20px 16px",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "10px"
+              }}>
+                <div style={{ background: "rgba(16, 185, 129, 0.12)", borderRadius: "50%", padding: "8px" }}>
+                  <CheckCircle2 style={{ width: "20px", height: "20px", color: "#10b981" }} />
+                </div>
+                <div style={{ fontSize: "13px", fontWeight: "700", color: "#fff" }}>
+                  Perfect Wardrobe Coverage!
+                </div>
+                <p style={{ fontSize: "11px", color: "var(--color-text-secondary)", margin: 0, lineHeight: "1.4" }}>
+                  Your bank and shared inventory slots do not contain any skins, dyes, or novelties that other registered guild members are missing. Awesome!
+                </p>
+              </div>
+            )}
+
+            {/* LOADED DYNAMIC SUGGESTIONS */}
+            {suggestionState === "loaded" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {suggestions.slice(0, 5).map((item) => {
+                  const rarityClass = `rarity-${item.rarity || "Basic"}`;
+                  
+                  return (
+                    <button
+                      key={item.itemId}
+                      onClick={() => triggerPropose(item.itemId)}
+                      disabled={proposing}
+                      className={`tab-btn ${rarityClass}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        fontSize: "12px",
+                        padding: "8px 12px",
+                        background: "rgba(0,0,0,0.15)",
+                        border: "1px solid rgba(255,255,255,0.06)",
+                        borderRadius: "8px",
+                        width: "100%",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        boxShadow: "none"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+                        e.currentTarget.style.borderColor = "var(--rarity-color, rgba(var(--color-gold-raw), 0.3))";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "rgba(0,0,0,0.15)";
+                        e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <div className="gw2-item-icon-container" style={{ width: "24px", height: "24px", flexShrink: 0 }}>
+                          <img src={item.icon || "/placeholder.png"} alt={item.name} className="gw2-item-icon" />
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                          <span style={{ fontWeight: "700", color: "var(--rarity-color, #fff)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "160px" }} title={item.name}>
+                            {item.name}
+                          </span>
+                          <span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
+                            {item.type}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                        <span style={{
+                          fontSize: "10px",
+                          background: "rgba(74, 222, 128, 0.08)",
+                          border: "1px solid rgba(74, 222, 128, 0.2)",
+                          color: "#4ade80",
+                          padding: "2px 8px",
+                          borderRadius: "20px",
+                          fontWeight: "700"
+                        }}>
+                          {item.demandCount} need
+                        </span>
+                        <PlusCircle style={{ width: "13px", height: "13px", color: "var(--color-gold)" }} />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Custom ID suggests */}
